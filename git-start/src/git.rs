@@ -1,5 +1,6 @@
 use std::fs::{self, File, OpenOptions};
 use std::io::ErrorKind;
+use std::os::unix::process::ExitStatusExt;
 use std::path::Path;
 use std::process::{Command, Stdio};
 
@@ -15,27 +16,53 @@ pub struct Commands;
 
 impl Runner for Commands {
     fn run(&self, dir: &Path, program: &str, args: &[&str]) -> Result<String, String> {
+        const MAX_STDERR_CHARS: usize = 2048;
+
         let mut command = Command::new(program);
-        command.current_dir(dir).args(args).stdin(Stdio::null());
+        command
+            .current_dir(dir)
+            .args(args)
+            .stdin(Stdio::null())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped());
         if program == "git" {
             command.env("GIT_TERMINAL_PROMPT", "0");
         } else if program == "npm" {
             command.env("npm_config_cache", dir.join(".git/oxidepm-npm-cache"));
         }
-        let output = command
-            .output()
+        let child = command
+            .spawn()
             .map_err(|err| format!("Could not run {program}: {err}"))?;
+        let pid = child.id();
+        let output = child
+            .wait_with_output()
+            .map_err(|err| format!("Could not wait for {program}: {err}"))?;
         if output.status.success() {
             Ok(String::from_utf8_lossy(&output.stdout)
                 .trim_end()
                 .to_string())
         } else {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            let detail: String = stderr.trim().chars().take(2048).collect();
+            let stderr = stderr.trim();
+            let start = stderr
+                .char_indices()
+                .rev()
+                .nth(MAX_STDERR_CHARS - 1)
+                .map_or(0, |(offset, _)| offset);
+            let detail = if stderr.is_empty() {
+                "no stderr output"
+            } else {
+                &stderr[start..]
+            };
+            let status = output.status;
+            let status = if status.signal().is_some() {
+                format!("child PID {pid}, {status}")
+            } else {
+                status.to_string()
+            };
             Err(format!(
-                "{program} {} failed ({}): {detail}",
-                args.first().copied().unwrap_or_default(),
-                output.status
+                "{program} {} failed ({status}): {detail}",
+                args.first().copied().unwrap_or_default()
             ))
         }
     }
@@ -219,6 +246,48 @@ pub mod tests {
     use std::cell::RefCell;
 
     use super::*;
+
+    #[test]
+    fn command_failure_keeps_the_end_of_stderr() {
+        let dir = tempfile::tempdir().unwrap();
+        let prefix = "é".repeat(2048);
+        let error = Commands
+            .run(
+                dir.path(),
+                "/bin/sh",
+                &[
+                    "-c",
+                    "printf '%s\\nfinal diagnostic\\n' \"$1\" >&2; exit 1",
+                    "sh",
+                    &prefix,
+                ],
+            )
+            .unwrap_err();
+        let (_, detail) = error.split_once("): ").unwrap();
+        assert_eq!(detail.chars().count(), 2048);
+        assert!(detail.ends_with("\nfinal diagnostic"), "{error}");
+    }
+
+    #[test]
+    fn silent_signal_reports_which_child_exited() {
+        let dir = tempfile::tempdir().unwrap();
+        let error = Commands
+            .run(
+                dir.path(),
+                "/bin/sh",
+                &[
+                    "-c",
+                    "ulimit -c 0; printf '%s' \"$$\" > child.pid; kill -s ABRT \"$$\"",
+                ],
+            )
+            .unwrap_err();
+        let pid = fs::read_to_string(dir.path().join("child.pid")).unwrap();
+        assert!(
+            error.contains(&format!("child PID {pid}, signal: 6")),
+            "{error}"
+        );
+        assert!(error.ends_with("no stderr output"), "{error}");
+    }
 
     #[derive(Default)]
     pub struct GitRunner {
