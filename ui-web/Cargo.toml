@@ -1,0 +1,35 @@
+[package]
+name = "oxidepm-adapter-ui-web"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "OxidePM adapter: the web API (REST and WebSocket) for the managed apps"
+
+[[bin]]
+name = "oxidepm-ui-web"
+path = "src/main.rs"
+
+[dependencies]
+oxidepm-adapter-sdk = { path = "../sdk" }
+oxidepm-adapter-proto = { workspace = true }
+oxidepm-core = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+toml = { workspace = true }
+futures = { workspace = true }
+getrandom = "0.2"
+axum = { version = "0.7", default-features = false, features = ["http1", "tokio", "ws", "json", "query"] }
+hyper1 = { package = "hyper", version = "1", default-features = false, features = ["http1", "server"] }
+hyper-util = { version = "0.1", default-features = false, features = ["server", "http1", "tokio", "service"] }
+tower = { version = "0.5", default-features = false, features = ["util"] }
+
+[dev-dependencies]
+tempfile = "3.10"
+tar = { version = "0.4", default-features = false }
+flate2 = "1.0"
+nix = { version = "0.28", features = ["signal", "process"] }
+sha2 = { workspace = true }
+tungstenite = "0.24"

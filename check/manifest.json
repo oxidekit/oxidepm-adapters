@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "name": "check",
+  "version": "0.4.0-rc.1",
+  "kind": "tool",
+  "summary": "Check if a project is ready to run (dependencies, env, ports).",
+  "description": "Checks a project directory for dependencies, lockfiles, environment files and port conflicts. With --fix it installs Node dependencies and creates .env from a template; with --set-env it updates .env.",
+  "tags": ["dev"],
+  "protocol": [1],
+  "min_daemon": "0.1.0",
+  "exec": "oxidepm-check",
+  "provides": {
+    "verbs": [
+      {
+        "name": "check",
+        "summary": "Check project readiness (dependencies, .env, ports).",
+        "tier": "caution",
+        "mode": "relayed",
+        "writes": true,
+        "dry_run": false,
+        "max_runtime_secs": 300,
+        "args_summary": "[TARGET] [--fix] [--strict] [--set-env KEY=VALUE]"
+      }
+    ]
+  },
+  "permissions": {
+    "host": {"level": "read", "scope": "all"},
+    "events": [],
+    "env_pass": [],
+    "network": {"mode": "outbound", "hosts": []},
+    "fs": {"read": ["any"], "write": ["$CWD", "$STATE"]},
+    "spawn": {"mode": "any"},
+    "memory_mb": 128,
+    "requires_enforcement": []
+  }
+}

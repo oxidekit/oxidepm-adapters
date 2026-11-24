@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "name": "ui-tui",
+  "version": "0.4.0-rc.1",
+  "kind": "tool",
+  "summary": "The terminal dashboard for the apps OxidePM manages.",
+  "description": "oxidepm monit opens a full-screen dashboard on your terminal: the apps with their state, CPU and memory, the details of the selected app, and its recent log lines. Stopping and restarting an app asks for y or n first. It can stop and restart apps (the lifecycle level), nothing else, and it runs only while the dashboard is open.",
+  "tags": ["ui"],
+  "protocol": [1],
+  "min_daemon": "0.1.0",
+  "exec": "oxidepm-ui-tui",
+  "provides": {
+    "verbs": [
+      {
+        "name": "monit",
+        "summary": "Open the terminal dashboard.",
+        "tier": "caution",
+        "mode": "session",
+        "writes": true,
+        "dry_run": false,
+        "max_runtime_secs": 30,
+        "args_summary": ""
+      }
+    ]
+  },
+  "permissions": {
+    "host": {"level": "lifecycle", "scope": "all"},
+    "events": [],
+    "env_pass": [],
+    "network": {"mode": "none"},
+    "fs": {"read": [], "write": []},
+    "spawn": {"mode": "none"},
+    "memory_mb": 64,
+    "requires_enforcement": []
+  }
+}

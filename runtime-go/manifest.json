@@ -1,0 +1,28 @@
+{
+  "schema": 1,
+  "name": "runtime-go",
+  "version": "0.4.0-rc.1",
+  "kind": "tool",
+  "summary": "Run Go apps.",
+  "description": "Provides the go runtime: the app is started with go run. It tells OxidePM what to run and OxidePM runs it; this adapter starts nothing, reads none of your files and has no network.",
+  "tags": ["runtime"],
+  "protocol": [1],
+  "min_daemon": "0.1.0",
+  "exec": "oxidepm-runtime-go",
+  "provides": {
+    "runtimes": ["go"],
+    "programs": ["go"],
+    "capture_programs": [],
+    "env_set": []
+  },
+  "permissions": {
+    "host": {"level": "read", "scope": "all"},
+    "events": [],
+    "env_pass": [],
+    "network": {"mode": "none"},
+    "fs": {"read": ["$STATE"], "write": []},
+    "spawn": {"mode": "none"},
+    "memory_mb": 64,
+    "requires_enforcement": ["network"]
+  }
+}

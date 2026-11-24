@@ -1,0 +1,27 @@
+[package]
+name = "oxidepm-adapter-git-start"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Prepare a git checkout for OxidePM to start"
+
+[[bin]]
+name = "oxidepm-git-start"
+path = "src/main.rs"
+
+[dependencies]
+oxidepm-adapter-sdk = { path = "../sdk" }
+oxidepm-adapter-proto.workspace = true
+oxidepm-core.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+url.workspace = true
+nix = { version = "0.28", features = ["fs"] }
+
+[dev-dependencies]
+oxidepm-runtime-testkit = { path = "../runtime-testkit" }
+tempfile = "3"

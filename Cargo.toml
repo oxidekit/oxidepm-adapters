@@ -1,0 +1,33 @@
+[workspace]
+resolver = "2"
+members = ["sdk", "notifier", "exporter-prometheus", "ui-web", "ui-tui", "runtime-testkit", "runtime-node", "runtime-python", "runtime-go", "runtime-rust", "bundle", "watch", "check", "init", "git-start", "deploy"]
+
+[workspace.package]
+version = "0.4.0-rc.1"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# the protocol and the shared helpers come from the core repository, by path for now
+oxidepm-adapter-proto = { path = "../oxidepm/crates/oxidepm-adapter-proto", features = ["tokio"] }
+oxidepm-core = { path = "../oxidepm/crates/oxidepm-core" }
+
+tokio = { version = "1.35", features = ["rt-multi-thread", "macros", "io-util", "io-std", "sync", "time", "net"] }
+async-trait = "0.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.11", default-features = false, features = ["json", "rustls-tls"] }
+futures = "0.3"
+hmac = "0.12"
+sha2 = "0.10"
+thiserror = "1.0"
+url = "2"
+hyper = { version = "0.14", default-features = false, features = ["server", "http1", "tcp"] }
+
+[profile.release]
+lto = true
+codegen-units = 1
+strip = true

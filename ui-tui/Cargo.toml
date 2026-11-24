@@ -1,0 +1,30 @@
+[package]
+name = "oxidepm-adapter-ui-tui"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "OxidePM adapter: the terminal dashboard (oxidepm monit)"
+
+[[bin]]
+name = "oxidepm-ui-tui"
+path = "src/main.rs"
+
+[dependencies]
+oxidepm-adapter-sdk = { path = "../sdk" }
+oxidepm-adapter-proto = { workspace = true }
+oxidepm-core = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+ratatui = "0.26"
+crossterm = "0.27"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tempfile = "3.10"
+tar = { version = "0.4", default-features = false }
+flate2 = "1.0"
+nix = { version = "0.28", features = ["signal", "process"] }
+sha2 = { workspace = true }
+libc = "0.2"

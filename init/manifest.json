@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "name": "init",
+  "version": "0.4.0-rc.1",
+  "kind": "tool",
+  "summary": "Scan a project directory and write oxidepm.config.toml.",
+  "description": "Detects Cargo, Node.js, Python and Go projects in the current directory and writes a validated oxidepm.config.toml. It has no network access and spawns no programs.",
+  "tags": ["dev"],
+  "protocol": [1],
+  "min_daemon": "0.1.0",
+  "exec": "oxidepm-init",
+  "provides": {
+    "verbs": [
+      {
+        "name": "init",
+        "summary": "Generate oxidepm.config.toml for a project directory.",
+        "tier": "caution",
+        "mode": "relayed",
+        "writes": true,
+        "dry_run": true,
+        "max_runtime_secs": 30,
+        "args_summary": "[DIR]"
+      }
+    ]
+  },
+  "permissions": {
+    "host": {"level": "read", "scope": "all"},
+    "events": [],
+    "env_pass": [],
+    "network": {"mode": "none"},
+    "fs": {"read": ["$CWD", "$STATE"], "write": ["$CWD", "$STATE"]},
+    "spawn": {"mode": "none"},
+    "memory_mb": 64,
+    "requires_enforcement": ["network"]
+  }
+}

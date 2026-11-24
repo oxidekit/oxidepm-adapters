@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "name": "notifier",
+  "version": "0.4.0-rc.1",
+  "kind": "service",
+  "summary": "Telegram, Discord, Slack and webhook notifications.",
+  "description": "Sends a message to the channels you configure when an app starts, stops, restarts, crashes, loops, goes over its memory limit or fails its health check. It reads only those events and its own config.toml, and it never touches your apps.",
+  "tags": ["notifier"],
+  "protocol": [1],
+  "min_daemon": "0.1.0",
+  "exec": "oxidepm-notifier",
+  "provides": {
+    "verbs": [
+      {
+        "name": "notify",
+        "summary": "Show, configure and test the notification channels.",
+        "tier": "caution",
+        "mode": "relayed",
+        "writes": true,
+        "dry_run": false,
+        "max_runtime_secs": 60,
+        "args_summary": "status | test | events [--set LIST] | severity LEVEL | telegram --chat ID | remove CHANNEL"
+      }
+    ]
+  },
+  "permissions": {
+    "host": {"level": "read", "scope": "all"},
+    "events": ["lifecycle"],
+    "env_pass": ["OXIDEPM_TELEGRAM_TOKEN"],
+    "network": {"mode": "outbound", "hosts": ["api.telegram.org", "discord.com", "hooks.slack.com"]},
+    "fs": {"read": ["$STATE", "/etc/resolv.conf", "/etc/hosts", "/etc/nsswitch.conf", "/etc/host.conf", "/etc/gai.conf"], "write": ["$STATE"]},
+    "spawn": {"mode": "none"},
+    "memory_mb": 128,
+    "requires_enforcement": []
+  }
+}

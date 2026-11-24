@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "name": "watch",
+  "version": "0.4.0-rc.1",
+  "kind": "service",
+  "summary": "Restart an app when its files change.",
+  "description": "Watches the directories an app lists under adapters.watch (paths, ignore, debounce_ms) and restarts that app, and only that app, after a trailing debounce window. It has no network, spawns no programs and writes nothing.",
+  "tags": ["dev"],
+  "protocol": [1],
+  "min_daemon": "0.1.0",
+  "exec": "oxidepm-watch",
+  "provides": {},
+  "permissions": {
+    "host": {"level": "lifecycle", "scope": "opted-in"},
+    "events": ["lifecycle"],
+    "env_pass": [],
+    "network": {"mode": "none"},
+    "fs": {"read": ["any"], "write": []},
+    "spawn": {"mode": "none"},
+    "memory_mb": 64,
+    "requires_enforcement": ["network"]
+  }
+}

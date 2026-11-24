@@ -1,0 +1,36 @@
+{
+  "schema": 1,
+  "name": "git-start",
+  "version": "0.4.0-rc.1",
+  "kind": "tool",
+  "summary": "Clone or update a git repository and prepare it for oxidepm start.",
+  "description": "Clones an HTTPS or SSH repository into its own state directory, prints the exact commit, and returns a launch spec for the CLI to start. It has read-only access to the daemon and writes only to its state directory. Subprocess execution is unrestricted so Git can use its transport helpers and optional npm installs can run. Dependency lifecycle scripts are disabled unless requested.",
+  "tags": ["deploy"],
+  "protocol": [1],
+  "min_daemon": "0.1.0",
+  "exec": "oxidepm-git-start",
+  "provides": {
+    "verbs": [
+      {
+        "name": "git-start",
+        "summary": "Clone a git repository and start it.",
+        "tier": "caution",
+        "mode": "relayed",
+        "writes": true,
+        "dry_run": true,
+        "max_runtime_secs": 300,
+        "args_summary": "<URL> [--branch BRANCH] [--name NAME] [--offline] [--install] [--allow-scripts] [--no-start]"
+      }
+    ]
+  },
+  "permissions": {
+    "host": {"level": "read", "scope": "all"},
+    "events": [],
+    "env_pass": ["SSH_AUTH_SOCK", "HOME"],
+    "network": {"mode": "outbound", "hosts": []},
+    "fs": {"read": ["any"], "write": ["$STATE"]},
+    "spawn": {"mode": "any"},
+    "memory_mb": 128,
+    "requires_enforcement": []
+  }
+}

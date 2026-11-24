@@ -1,0 +1,17 @@
+[package]
+name = "oxidepm-adapter-sdk"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "The main loop of an OxidePM service adapter: handshake, ping, events, relayed verbs, shutdown"
+
+[dependencies]
+oxidepm-adapter-proto = { workspace = true }
+tokio = { workspace = true }
+async-trait = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["test-util"] }
+tempfile = "3.10"

@@ -1,0 +1,32 @@
+[package]
+name = "oxidepm-adapter-bundle"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Builds release adapter archives, their catalog, and SHA-256 checksums"
+
+[lib]
+name = "oxidepm_adapter_bundle"
+path = "src/lib.rs"
+
+[[bin]]
+name = "oxidepm-adapter-bundle"
+path = "src/main.rs"
+
+[dependencies]
+oxidepm-adapter-proto = { workspace = true }
+oxidepm-fetch = { path = "../../oxidepm/crates/oxidepm-fetch" }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+chrono = { workspace = true }
+tar = { version = "0.4", default-features = false }
+flate2 = "1.0"
+semver = "1.0"
+tempfile = "3.10"
+
+[target.'cfg(any(target_os = "linux", target_os = "macos"))'.dependencies]
+rustix = { version = "1.1.2", features = ["fs"] }
+
+[dev-dependencies]
+oxidepm-adapter-proto = { workspace = true, features = ["test-support"] }

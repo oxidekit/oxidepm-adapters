@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [prod, main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      core_ref:
+        description: Core branch, tag, or commit to test
+        type: string
+
+permissions:
+  contents: read
+
+env:
+  CORE_REPOSITORY: oxidekit/oxidepm
+  CARGO_BUILD_JOBS: 8
+  CARGO_PROFILE_DEV_DEBUG: 0
+  CARGO_PROFILE_TEST_DEBUG: 0
+  RUST_TEST_THREADS: 1
+
+jobs:
+  ci:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    defaults:
+      run:
+        working-directory: oxidepm-adapters
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: oxidepm-adapters
+      - name: Look for a matching core branch
+        id: core
+        if: inputs.core_ref == '' && (github.event_name == 'pull_request' || github.ref_type == 'branch')
+        shell: bash
+        env:
+          BRANCH: ${{ github.head_ref || github.ref_name }}
+        run: |
+          ref="refs/heads/$BRANCH"
+          git ls-remote --heads "https://github.com/$CORE_REPOSITORY.git" "$ref" |
+            awk -v ref="$ref" '$2 == ref { print "ref=" $2 }' >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ env.CORE_REPOSITORY }}
+          # Use the dispatch ref or matching branch when available. Default to prod.
+          ref: ${{ inputs.core_ref || steps.core.outputs.ref || 'prod' }}
+          path: oxidepm
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - run: cargo fmt --check
+      - run: cargo clippy --workspace --all-targets --locked -- -D warnings
+      - name: Test
+        run: |
+          exec 3<&- 6<&-
+          export OXIDEPM_HOME
+          OXIDEPM_HOME=$(mktemp -d /tmp/op.XXXXXX)
+          trap 'rm -rf -- "$OXIDEPM_HOME"' EXIT
+          export TMPDIR="$OXIDEPM_HOME/tmp"
+          mkdir -p "$TMPDIR"
+          if [[ "$RUNNER_OS" == macOS ]]; then
+            cargo test --workspace --lib --bins --no-fail-fast --locked
+          else
+            cargo fetch --manifest-path ../oxidepm/Cargo.toml
+            cargo test --workspace --no-fail-fast --locked
+          fi

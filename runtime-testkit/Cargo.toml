@@ -1,0 +1,20 @@
+[package]
+name = "oxidepm-runtime-testkit"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "What the integration tests of the runtime adapters share: the real daemon and CLI of the core checkout, a private home, the adapter packaged and imported by its pinned hash"
+publish = false
+
+[dependencies]
+oxidepm-adapter-proto = { workspace = true }
+oxidepm-adapter-bundle = { path = "../bundle" }
+chrono = { workspace = true }
+oxidepm-core = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true }
+tempfile = "3.10"
+tar = { version = "0.4", default-features = false }
+flate2 = "1.0"
+nix = { version = "0.28", features = ["signal", "process"] }

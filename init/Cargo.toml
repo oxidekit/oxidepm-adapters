@@ -1,0 +1,25 @@
+[package]
+name = "oxidepm-adapter-init"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+rust-version.workspace = true
+description = "Generate an OxidePM config from a project directory"
+
+[[bin]]
+name = "oxidepm-init"
+path = "src/main.rs"
+
+[dependencies]
+oxidepm-adapter-sdk = { path = "../sdk" }
+oxidepm-adapter-proto.workspace = true
+oxidepm-core.workspace = true
+tokio.workspace = true
+async-trait.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+oxidepm-runtime-testkit = { path = "../runtime-testkit" }
+tempfile = "3"
