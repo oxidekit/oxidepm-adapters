@@ -29,6 +29,9 @@ impl Runner for Commands {
             command.env("GIT_TERMINAL_PROMPT", "0");
         } else if program == "npm" {
             command.env("npm_config_cache", dir.join(".git/oxidepm-npm-cache"));
+            #[cfg(target_os = "linux")]
+            limit_npm_stack(&mut command)
+                .map_err(|err| format!("Could not read the stack limit for npm: {err}"))?;
         }
         let child = command
             .spawn()
@@ -66,6 +69,37 @@ impl Runner for Commands {
             ))
         }
     }
+}
+
+#[cfg(target_os = "linux")]
+fn limit_npm_stack(command: &mut Command) -> std::io::Result<()> {
+    use nix::libc;
+    use std::os::unix::process::CommandExt;
+
+    const STACK_BYTES: libc::rlim_t = 8 * 1024 * 1024;
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: getrlimit writes to the initialized limit struct.
+    if unsafe { libc::getrlimit(libc::RLIMIT_STACK, &mut limit) } != 0 {
+        return Err(std::io::Error::last_os_error());
+    }
+    // Large inherited startup stacks can use up RLIMIT_DATA before npm starts its worker pool.
+    // With an unlimited stack limit, libuv already falls back to a smaller default.
+    if limit.rlim_cur != libc::RLIM_INFINITY && limit.rlim_cur > STACK_BYTES {
+        limit.rlim_cur = STACK_BYTES;
+        // SAFETY: the child only sets its own limit with a syscall and reads errno on failure.
+        unsafe {
+            command.pre_exec(move || {
+                if libc::setrlimit(libc::RLIMIT_STACK, &limit) != 0 {
+                    return Err(std::io::Error::last_os_error());
+                }
+                Ok(())
+            });
+        }
+    }
+    Ok(())
 }
 
 pub fn lock(dir: &Path) -> Result<Flock<File>, String> {

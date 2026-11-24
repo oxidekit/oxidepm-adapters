@@ -94,6 +94,13 @@ fn git(dir: &Path, args: &[&str]) -> String {
 }
 
 fn new_checkout(files: &[(&str, &str)]) -> (tempfile::TempDir, String, Env) {
+    new_checkout_with_path(files, None)
+}
+
+fn new_checkout_with_path(
+    files: &[(&str, &str)],
+    path: Option<&str>,
+) -> (tempfile::TempDir, String, Env) {
     let fixture = tempfile::tempdir().unwrap();
     let src = fixture.path().join("work");
     fs::create_dir(&src).unwrap();
@@ -133,16 +140,21 @@ fn new_checkout(files: &[(&str, &str)]) -> (tempfile::TempDir, String, Env) {
         format!("[url \"file://{}\"]\n\tinsteadOf = {URL}\n", bare.display()),
     )
     .unwrap();
-    let mut env = Env::bare(&[("GIT_CONFIG_GLOBAL", config.to_str().unwrap())]);
+    let mut daemon_env = vec![("GIT_CONFIG_GLOBAL", config.to_str().unwrap())];
+    if let Some(path) = path {
+        daemon_env.push(("PATH", path));
+    }
+    let mut env = Env::bare(&daemon_env);
     let mut test_adapter = Adapter::new(
         env!("CARGO_MANIFEST_DIR"),
         env!("CARGO_BIN_EXE_oxidepm-git-start"),
     );
     set_manifest(&mut test_adapter, |manifest| {
-        manifest["permissions"]["env_pass"]
-            .as_array_mut()
-            .unwrap()
-            .push(json!("GIT_CONFIG_GLOBAL"));
+        let env_pass = manifest["permissions"]["env_pass"].as_array_mut().unwrap();
+        env_pass.push(json!("GIT_CONFIG_GLOBAL"));
+        if path.is_some() {
+            env_pass.push(json!("PATH"));
+        }
     });
     env.install(&test_adapter);
     (fixture, commit, env)
@@ -220,27 +232,80 @@ fn git_start_json_includes_start_outcome_and_honors_no_start() {
 
 #[test]
 fn git_start_installs_node_dependencies_without_running_scripts() {
-    // The sandbox searches the system path rather than the test runner's toolchain.
-    if !["/usr/local/bin/npm", "/usr/bin/npm", "/bin/npm"]
-        .iter()
-        .any(|path| Path::new(path).is_file())
-    {
+    if system_program("npm").is_none() {
         eprintln!("npm is unavailable on the adapter search path");
         return;
     }
-    let (_fixture, _, env) = new_checkout(&[
+    let (_fixture, _, env) = new_checkout(node_project());
+    check_node_install(&env);
+}
+
+fn system_program(name: &str) -> Option<PathBuf> {
+    // The sandbox searches the system path rather than the test runner's toolchain.
+    ["/usr/local/bin", "/usr/bin", "/bin"]
+        .iter()
+        .map(|dir| Path::new(dir).join(name))
+        .find(|path| path.is_file())
+}
+
+fn node_project() -> &'static [(&'static str, &'static str)] {
+    &[
         (
             "package.json",
             r#"{"name":"fixture","version":"1.0.0","scripts":{"postinstall":"touch ran-install"}}"#,
         ),
         (".npmrc", "audit=false\n"),
-    ]);
+    ]
+}
+
+fn check_node_install(env: &Env) {
     let run = env.cli(&["--json", "git-start", URL, "--no-start", "--install"]);
     assert_eq!(run.code, 0, "{}", run.all());
     let done: Value = serde_json::from_str(&run.stdout).unwrap();
     let dir = Path::new(done["result"]["clone_dir"].as_str().unwrap());
     assert!(dir.join("package-lock.json").is_file());
     assert!(!dir.join("ran-install").exists());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn git_start_installs_node_from_a_symlinked_prefix_with_a_large_stack_limit() {
+    use nix::libc;
+    use std::os::unix::fs::symlink;
+
+    let (Some(node), Some(npm)) = (system_program("node"), system_program("npm")) else {
+        eprintln!("Node and npm are required on the adapter search path");
+        return;
+    };
+    let tools = tempfile::tempdir().unwrap();
+    let installed_bin = tools.path().join("toolcache/node/bin");
+    fs::create_dir_all(&installed_bin).unwrap();
+    fs::copy(node, installed_bin.join("node")).unwrap();
+    symlink(npm, installed_bin.join("npm")).unwrap();
+    let bin = tools.path().join("bin");
+    symlink(&installed_bin, &bin).unwrap();
+    let path = format!("{}:/usr/local/bin:/usr/bin:/bin", bin.display());
+    let (_fixture, _, env) = new_checkout_with_path(node_project(), Some(&path));
+
+    let pid = env.daemon_pid() as libc::pid_t;
+    let mut limit = libc::rlimit {
+        rlim_cur: 0,
+        rlim_max: 0,
+    };
+    // SAFETY: the daemon is this test's child and the kernel writes into a valid rlimit.
+    let result = unsafe { libc::prlimit(pid, libc::RLIMIT_STACK, std::ptr::null(), &mut limit) };
+    assert_eq!(result, 0, "{}", std::io::Error::last_os_error());
+    const LARGE_STACK: libc::rlim_t = 16 * 1024 * 1024;
+    if limit.rlim_max < LARGE_STACK {
+        eprintln!("The inherited hard stack limit is below 16 MiB");
+        return;
+    }
+    limit.rlim_cur = LARGE_STACK;
+    // SAFETY: the kernel reads a valid rlimit and applies it only to this test's daemon.
+    let result = unsafe { libc::prlimit(pid, libc::RLIMIT_STACK, &limit, std::ptr::null_mut()) };
+    assert_eq!(result, 0, "{}", std::io::Error::last_os_error());
+
+    check_node_install(&env);
 }
 
 #[test]
