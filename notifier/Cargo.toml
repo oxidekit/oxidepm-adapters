@@ -27,6 +27,7 @@ sha2 = { workspace = true }
 url = { workspace = true }
 
 [dev-dependencies]
+oxidepm-runtime-testkit = { path = "../runtime-testkit" }
 tempfile = "3.10"
 tar = { version = "0.4", default-features = false }
 flate2 = "1.0"

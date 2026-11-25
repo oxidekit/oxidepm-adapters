@@ -58,6 +58,45 @@ fn everything_written(env: &Env) -> String {
 
 // ---- who may ask -------------------------------------------------------------------------------
 
+#[cfg(target_os = "linux")]
+#[test]
+fn bundled_web_adapter_serves_authenticated_status() {
+    use oxidepm_runtime_testkit::{Adapter, Env as BundleEnv};
+
+    let port = free_port();
+    let manifest_dir = tempfile::tempdir().unwrap();
+    std::fs::write(
+        manifest_dir.path().join("manifest.json"),
+        manifest_for(port, false),
+    )
+    .unwrap();
+    let adapter = Adapter::new(
+        manifest_dir.path().to_str().unwrap(),
+        env!("CARGO_BIN_EXE_oxidepm-ui-web"),
+    );
+    let mut env = BundleEnv::with_bundle(&[&adapter], &[]);
+    let state = env.home.join("adapters/state/ui-web");
+    std::fs::create_dir_all(&state).unwrap();
+    std::fs::write(
+        state.join("config.toml"),
+        format!("listen = \"127.0.0.1:{port}\"\nkey = \"{KEY}\"\n"),
+    )
+    .unwrap();
+    env.install_bundled("ui-web");
+    assert!(wait_for(20, || listening(port)), "{}", env.daemon_stderr());
+
+    let reply = env.start("bundled-web", "cmd", "/bin/sleep", &["30"], &env.project());
+    assert_eq!(reply["type"], "started", "{reply}");
+    let health = api_with(port, "GET", "/api/health", &[], "");
+    assert_eq!(health.status, 200, "{}", health.body);
+    assert_eq!(health.json(), json!({"ok": true}));
+    let unkeyed = api_with(port, "GET", "/api/processes", &[], "");
+    assert_eq!(unkeyed.status, 401, "{}", unkeyed.body);
+    let keyed = api(port, "GET", "/api/processes", "");
+    assert_eq!(keyed.status, 200, "{}", keyed.body);
+    assert_eq!(keyed.json()["data"][0]["spec"]["name"], "bundled-web");
+}
+
 #[test]
 fn loopback_without_key_is_refused() {
     let (env, port) = start();

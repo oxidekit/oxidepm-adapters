@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "init",
-  "version": "0.4.0-rc.2",
+  "version": "0.4.0-rc.3",
   "kind": "tool",
   "summary": "Scan a project directory and write oxidepm.config.toml.",
   "description": "Detects Cargo, Node.js, Python and Go projects in the current directory and writes a validated oxidepm.config.toml. It has no network access and spawns no programs.",

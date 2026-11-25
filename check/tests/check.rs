@@ -2,14 +2,18 @@ use std::{fs, sync::OnceLock};
 
 use oxidepm_runtime_testkit::{Adapter, Env};
 
-fn setup() -> Env {
+fn adapter() -> &'static Adapter {
     static ADAPTER: OnceLock<Adapter> = OnceLock::new();
-    Env::new(ADAPTER.get_or_init(|| {
+    ADAPTER.get_or_init(|| {
         Adapter::new(
             env!("CARGO_MANIFEST_DIR"),
             env!("CARGO_BIN_EXE_oxidepm-check"),
         )
-    }))
+    })
+}
+
+fn setup() -> Env {
+    Env::new(adapter())
 }
 
 #[test]
@@ -183,4 +187,37 @@ fn start_check_runs_preflight_before_starting_the_app() {
         run.all()
     );
     assert!(env.app("healthy").is_some());
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn bundled_check_runs_preflight_on_a_project_directory() {
+    let mut env = Env::with_bundle(&[adapter()], &[]);
+    env.install_bundled("check");
+    let dir = env.project();
+    let package = dir.join("package.json");
+    fs::write(&package, "{").unwrap();
+    let args = ["start", "--check", dir.to_str().unwrap()];
+    let run = env.cli(&args);
+    assert_eq!(run.code, 1, "{}", run.all());
+    assert!(run.all().contains("Invalid package.json"), "{}", run.all());
+    assert!(
+        run.all().contains("Preflight checks failed"),
+        "{}",
+        run.all()
+    );
+    assert!(env.app("project").is_none());
+
+    fs::write(&package, "{}").unwrap();
+    fs::write(dir.join("package-lock.json"), "{}").unwrap();
+    fs::create_dir(dir.join("node_modules")).unwrap();
+    let run = env.cli(&args);
+    assert_eq!(run.code, 1, "{}", run.all());
+    assert!(run.stdout.contains("All checks passed"), "{}", run.all());
+    assert!(
+        run.stderr
+            .contains("adapter 'runtime-node', which is not enabled"),
+        "{}",
+        run.all()
+    );
 }

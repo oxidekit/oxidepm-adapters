@@ -113,6 +113,16 @@ fn file_change_restarts_opted_in_app() {
 }
 
 #[test]
+fn bundled_watch_restarts_an_opted_in_app_after_consent() {
+    let mut env = Env::with_bundle(&[&adapter()], &[]);
+    env.install_bundled("watch");
+    let dir = env.project();
+    let first = start_watching(&env, &dir, 100);
+    write(&dir, "source.txt", "changed");
+    wait_restarted(&env, first);
+}
+
+#[test]
 fn watches_apps_while_the_first_health_probe_is_pending() {
     let env = Env::new(&adapter());
     let dir = env.project();

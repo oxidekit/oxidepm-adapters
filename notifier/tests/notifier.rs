@@ -32,6 +32,39 @@ fn count_with(mock: &Mock, needle: &str) -> usize {
 
 // ---- the path from the daemon's events to a message --------------------------------------------
 
+#[cfg(target_os = "linux")]
+#[test]
+fn bundled_notifier_sends_a_lifecycle_webhook() {
+    use oxidepm_runtime_testkit::{Adapter, Env as BundleEnv};
+
+    let mock = Mock::start();
+    let adapter = Adapter::new(
+        env!("CARGO_MANIFEST_DIR"),
+        env!("CARGO_BIN_EXE_oxidepm-notifier"),
+    );
+    let mut env = BundleEnv::with_bundle(&[&adapter], &[]);
+    let state = env.home.join("adapters/state/notifier");
+    std::fs::create_dir_all(&state).unwrap();
+    std::fs::write(
+        state.join("config.toml"),
+        format!("[webhook]\nurl = \"{}\"\n", mock.url("/bundled")),
+    )
+    .unwrap();
+    env.install_bundled("notifier");
+    let reply = env.start("bundled-app", "cmd", "/bin/sleep", &["30"], &env.project());
+    assert_eq!(reply["type"], "started", "{reply}");
+    assert!(
+        wait_for(20, || !mock.requests_to("/bundled").is_empty()),
+        "{:?}\n{}",
+        mock.requests(),
+        env.daemon_stderr()
+    );
+    let body = mock.requests_to("/bundled")[0].json();
+    assert_eq!(body["version"], 1, "{body}");
+    assert_eq!(body["event"], "start", "{body}");
+    assert_eq!(body["process"], "bundled-app", "{body}");
+}
+
 #[test]
 fn lifecycle_events_reach_telegram_through_the_real_daemon() {
     let mock = Mock::start();

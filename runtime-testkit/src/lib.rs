@@ -1,7 +1,7 @@
 //! What the integration tests of the runtime adapters share: the real `oxidepmd` and `oxidepm` of
 //! the core repository (a branch checked out next to this one, built once per test run), a
-//! private home for each test, and the adapter packaged and imported by its pinned hash. Nothing
-//! here touches `~/.oxidepm`.
+//! private home for each test, and adapters imported from an installed release bundle or by
+//! their pinned hashes.
 
 use std::io::{BufRead, BufReader, Write};
 use std::os::unix::net::UnixStream;
@@ -77,48 +77,6 @@ pub fn core_bins() -> &'static CoreBins {
             "building the core failed:\n{}",
             String::from_utf8_lossy(&output.stderr)
         );
-        let debug = target.join("debug");
-        CoreBins {
-            daemon: debug.join("oxidepmd"),
-            cli: debug.join("oxidepm"),
-        }
-    })
-}
-
-/// The daemon, CLI and sandbox launcher for bundle tests. The daemon and CLI need test hooks to
-/// read the bundle from a fixture directory. These binaries have their own target directory so
-/// the plain build and this one do not rebuild each other.
-fn core_bins_with_bundle_hooks() -> &'static CoreBins {
-    static BINS: OnceLock<CoreBins> = OnceLock::new();
-    BINS.get_or_init(|| {
-        let core = core_dir();
-        let target = std::env::var_os("OXIDEPM_CORE_TEST_TARGET_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| {
-                Path::new(env!("CARGO_MANIFEST_DIR")).join("../target/core-test-support")
-            });
-        // one build for each, so that each gets its own features
-        for (package, feature) in [
-            ("oxidepmd", Some("test-hooks")),
-            ("oxidepm", Some("test-support")),
-            ("oxidepm-sandbox", None),
-        ] {
-            let mut cargo =
-                Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
-            cargo
-                .args(["build", "-p", package, "--offline", "--quiet"])
-                .current_dir(&core)
-                .env("CARGO_TARGET_DIR", &target);
-            if let Some(feature) = feature {
-                cargo.args(["--features", feature]);
-            }
-            let output = cargo.output().expect("run cargo to build the core");
-            assert!(
-                output.status.success(),
-                "building {package} with its test hooks failed:\n{}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-        }
         let debug = target.join("debug");
         CoreBins {
             daemon: debug.join("oxidepmd"),
@@ -211,10 +169,9 @@ pub struct Env {
     bundle: Option<Bundle>,
 }
 
-const BUNDLE_DIR_ENV: &str = "OXIDEPM_TEST_BUNDLE_DIR";
-
 struct Bundle {
     dir: PathBuf,
+    bins: CoreBins,
     _scratch: tempfile::TempDir,
 }
 
@@ -232,11 +189,10 @@ impl Env {
         Env::start_daemon(daemon_env, None)
     }
 
-    /// A daemon in a new home with a release bundle made by the bundle tool. The daemon and CLI
-    /// read it from `OXIDEPM_TEST_BUNDLE_DIR`.
+    /// A daemon in a new home with a release bundle installed alongside the core binaries.
     pub fn with_bundle(adapters: &[&Adapter], daemon_env: &[(&str, &str)]) -> Env {
         let scratch = tempfile::tempdir().expect("tempdir");
-        let dir = scratch.path().join("bundle");
+        let dir = scratch.path().join("share/oxidepm/adapters");
         let inputs: Vec<oxidepm_adapter_bundle::Input> = adapters
             .iter()
             .map(|a| oxidepm_adapter_bundle::Input {
@@ -256,20 +212,40 @@ impl Env {
             },
         )
         .expect("make the bundle");
+
+        let bin = scratch.path().join("bin");
+        std::fs::create_dir(&bin).unwrap();
+        let core = core_bins();
+        for (source, name) in [
+            (core.cli.clone(), "oxidepm"),
+            (core.daemon.clone(), "oxidepmd"),
+            (
+                core.daemon.with_file_name("oxidepm-sandbox"),
+                "oxidepm-sandbox",
+            ),
+        ] {
+            let dest = bin.join(name);
+            if std::fs::hard_link(&source, &dest).is_err() {
+                std::fs::copy(&source, &dest).expect("install the core binary");
+            }
+        }
         Env::start_daemon(
             daemon_env,
             Some(Bundle {
                 dir,
+                bins: CoreBins {
+                    daemon: bin.join("oxidepmd"),
+                    cli: bin.join("oxidepm"),
+                },
                 _scratch: scratch,
             }),
         )
     }
 
     fn start_daemon(daemon_env: &[(&str, &str)], bundle: Option<Bundle>) -> Env {
-        let bins = if bundle.is_some() {
-            core_bins_with_bundle_hooks()
-        } else {
-            core_bins()
+        let bins = match &bundle {
+            Some(bundle) => &bundle.bins,
+            None => core_bins(),
         };
         let dir = tempfile::tempdir().expect("tempdir");
         let home = dir.path().join("home");
@@ -285,9 +261,6 @@ impl Env {
             .stdin(Stdio::null())
             .stdout(Stdio::null())
             .stderr(stderr);
-        if let Some(bundle) = &bundle {
-            command.env(BUNDLE_DIR_ENV, &bundle.dir);
-        }
         let child = command.spawn().expect("spawn oxidepmd");
         std::fs::create_dir_all(dir.path().join("project")).unwrap();
         let env = Env {
@@ -340,12 +313,39 @@ impl Env {
         ]);
         assert_eq!(imported.code, 0, "import failed:\n{}", imported.all());
         self.adapter_name = adapter.name.clone();
+        self.enable(&pkg.fingerprint);
+    }
+
+    /// Import a bundled adapter with broader permissions and accept its grant.
+    pub fn install_bundled(&mut self, name: &str) {
+        let import = self.cli(&["adapter", "import", "--bundled", name, "--enable"]);
+        assert_eq!(import.code, 2, "{}", import.all());
+        assert!(
+            import.stderr.contains("needs your consent"),
+            "{}",
+            import.all()
+        );
+        assert!(
+            import.stdout.contains("bundled with this release"),
+            "{}",
+            import.all()
+        );
+        self.adapter_name = name.to_string();
+        let info = self.adapter_info();
+        assert_eq!(info["trust"], "bundled", "{info}");
+        assert_eq!(info["enabled"], false, "{info}");
+        let fingerprint = info["fingerprint"].as_str().expect("a fingerprint");
+        assert!(import.stderr.contains(fingerprint), "{}", import.all());
+        self.enable(fingerprint);
+    }
+
+    fn enable(&self, fingerprint: &str) {
         let enabled = self.cli(&[
             "adapter",
             "enable",
-            &adapter.name,
+            &self.adapter_name,
             "--accept",
-            &pkg.fingerprint,
+            fingerprint,
         ]);
         assert_eq!(
             enabled.code,
@@ -367,10 +367,9 @@ impl Env {
     }
 
     pub fn cli(&self, args: &[&str]) -> Run {
-        let bins = if self.bundle.is_some() {
-            core_bins_with_bundle_hooks()
-        } else {
-            core_bins()
+        let bins = match &self.bundle {
+            Some(bundle) => &bundle.bins,
+            None => core_bins(),
         };
         let mut command = Command::new(&bins.cli);
         command
@@ -381,9 +380,6 @@ impl Env {
             .env("OXIDEPM_HOME", &self.home)
             .current_dir(self.project())
             .stdin(Stdio::null());
-        if let Some(bundle) = self.bundle_dir() {
-            command.env(BUNDLE_DIR_ENV, bundle);
-        }
         let out = command.output().expect("run the CLI");
         Run {
             code: out.status.code().unwrap_or(-1),

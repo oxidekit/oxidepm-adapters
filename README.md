@@ -1,8 +1,13 @@
 # OxidePM adapters
 
-Adapters for OxidePM: separate programs that `oxidepmd` starts, supervises and talks to over the
-adapter protocol (JSON lines on stdin and stdout). Check out the core repository next to this one
-as `../oxidepm` so Cargo can resolve the shared crates.
+OxidePM adapters are separate programs that `oxidepmd` starts, supervises and talks to over the
+adapter protocol (JSON lines on stdin and stdout). Adapters run only on Linux. The core runs
+on macOS with the built-in `cmd` runtime.
+
+Install and enable an adapter from an OxidePM release with `oxidepm adapter import --bundled <name> --enable`.
+Review the permissions and confirm the grant at the prompt. Bundled imports work offline using
+the release checksums. For source builds, check out the core repository next to this one as
+`../oxidepm` so Cargo can resolve the shared crates.
 
 | Directory | What |
 |---|---|
@@ -28,14 +33,12 @@ as `../oxidepm` so Cargo can resolve the shared crates.
 `cargo test` runs the unit tests and the integration tests. The integration tests build and start
 the real `oxidepmd` and `oxidepm` of the OxidePM checkout (`../oxidepm`, or `OXIDEPM_CORE_DIR`;
 their target directory is `OXIDEPM_CORE_TARGET_DIR`, by default the target directory of that
-checkout), package the adapter, import it by its pinned hash with `--allow-reserved-name`, enable
-it, and drive it with the daemon's own lifecycle events. Every test has a private home and never
-touches `~/.oxidepm`.
+checkout), package and import adapters from release-style bundles or by their pinned hashes,
+enable them, and drive them with the daemon's own lifecycle events. Every test uses a private home.
 
 ## The notifier
 
-Import and enable it with `oxidepm adapter import notifier --enable` once it is in the signed index,
-or by hand from an archive with `--sha256 <hash> --allow-reserved-name`. Its configuration is
+Import and enable it with `oxidepm adapter import --bundled notifier --enable`. Its configuration is
 `config.toml` in its state directory (`oxidepm notify status` prints the path):
 
 ```toml
@@ -65,9 +68,8 @@ nothing is sent until it is fixed. The file is read again when it changes.
 
 `exporter-prometheus` is a service with read access to the daemon. It listens on `127.0.0.1:9616`
 and, on each scrape, asks the daemon for the status of the apps (`host.request` `Status`; at most
-one question a second, however many scrapers there are). Import and enable it like any adapter:
-`oxidepm adapter import exporter-prometheus --enable` once it is in the signed index, or by hand from
-an archive with `--sha256 <hash> --allow-reserved-name`.
+one question a second, however many scrapers there are). Import and enable it with
+`oxidepm adapter import --bundled exporter-prometheus --enable`.
 
 ```yaml
 # prometheus.yml
@@ -105,9 +107,8 @@ key = "at least 16 characters"  # required for any address that is not loopback
 
 `ui-web` is a service with the `lifecycle` level and the scope `opted-in`. It listens on
 `127.0.0.1:9615` and answers REST and WebSocket requests by asking the daemon (`host.request`) as the
-actor `adapter:ui-web`; the daemon's policy and audit log apply to every call. Import and enable it
-like any adapter (`oxidepm adapter import ui-web --enable` once it is in the signed index, or by
-hand with `--sha256 <hash> --allow-reserved-name`).
+actor `adapter:ui-web`. The daemon's policy and audit log apply to every call. Import and enable it
+with `oxidepm adapter import --bundled ui-web --enable`.
 
 * **A key on every request, loopback included.** Without one, any web page the person visits could
   send POST and DELETE requests to `http://127.0.0.1:9615`. The first start makes a random key in
@@ -153,8 +154,7 @@ terminal at `enable` is the way to give it.
 ## The terminal dashboard
 
 `oxidepm monit` is a session verb of the `ui-tui` adapter. Import and enable it with
-`oxidepm adapter import ui-tui --enable` once it is in the signed index, or by hand from an archive
-with `--sha256 <hash> --allow-reserved-name`.
+`oxidepm adapter import --bundled ui-tui --enable`.
 
 The adapter is a tool, not a service: it is started when `oxidepm monit` is run and ends with it.
 `oxidepm` hands its own terminal (standard input and output) to the daemon, which starts the adapter
@@ -234,19 +234,8 @@ in `logs/<name>-build.log` and the last lines in the error.
 
 ## Development and deployment adapters
 
-These adapters require a running daemon. Build the adapter and package it for your machine.
-For example, on Linux x86_64:
-
-```sh
-cargo build --release -p oxidepm-adapter-watch -p oxidepm-adapter-bundle
-target/release/oxidepm-adapter-bundle --out target/watch-bundle \
-    --target x86_64-unknown-linux-gnu --url-base https://example.org/adapters --sequence 1 \
-    watch:target/release/oxidepm-watch
-```
-
-Use the archive's digest from `target/watch-bundle/SHA256SUMS` with
-`oxidepm adapter import ./target/watch-bundle/watch-0.4.0-rc.2.tar.gz --sha256 <digest> --allow-reserved-name --enable`.
-The bundle builder requires a catalog URL even for archives you import locally.
+Import and enable each adapter as needed, for example
+`oxidepm adapter import --bundled watch --enable`.
 
 - **watch** restarts an app after a change under a configured path. Add
   `[apps.adapters.watch]` to the app with optional `paths` (default `["."]`),
@@ -269,26 +258,40 @@ The bundle builder requires a catalog URL even for archives you import locally.
   executable. Restart failures exit with status 3. Both verbs support `--dry-run`.
   The daemon may pass an agent socket through `SSH_AUTH_SOCK` on Linux with Landlock ABI 9 or later.
 
-This release runs adapters on Linux. The macOS release supports the core `cmd` runtime.
-
 ## Release bundles
 
-OxidePM release archives carry the runtime adapters under `share/oxidepm/adapters`.
+OxidePM release archives carry every adapter under `share/oxidepm/adapters`.
 The bundle tool writes the archives, `index.json`, and `SHA256SUMS`. The CLI and
-daemon verify the catalog and selected archives against `SHA256SUMS` when you import
-with `oxidepm adapter import --bundled --tag runtime --enable --yes`. The outer release
-archive is covered by the release's `checksums.txt`. A catalog intended for network
-distribution also needs a signature.
+daemon verify the catalog and selected archives against `SHA256SUMS` on bundled import.
+The release's `checksums.txt` covers the outer archive. A catalog intended for network
+distribution needs a signature.
+
+Use `--tag runtime` for the four runtimes, `--tag dev` for `watch`, `check`, and `init`,
+`--tag deploy` for `git-start` and `deploy`, `--tag ui` for `ui-web` and `ui-tui`,
+`--tag notifier` for `notifier`, or `--tag exporter` for `exporter-prometheus`.
+On Linux, the installer enables only the runtimes with `oxidepm adapter import --bundled --tag runtime --enable --yes`.
+`--yes` applies only to pure adapters. To enable an adapter with broader permissions
+without a terminal, import it first, review the grant, and use the printed
+`oxidepm adapter enable <name> --accept <fingerprint>` command.
+
+### Import an adapter built from source
+
+Build the executable and package it for your machine. For example, on Linux x86_64:
 
 ```sh
-cargo build --release -p oxidepm-adapter-runtime-node -p oxidepm-adapter-runtime-python \
-    -p oxidepm-adapter-runtime-go -p oxidepm-adapter-runtime-rust
-cargo run --release -p oxidepm-adapter-bundle -- --out target/bundle --target x86_64-unknown-linux-gnu \
-    --url-base https://example.org/adapters --sequence 12 \
-    runtime-node:target/release/oxidepm-runtime-node runtime-python:target/release/oxidepm-runtime-python \
-    runtime-go:target/release/oxidepm-runtime-go runtime-rust:target/release/oxidepm-runtime-rust
+cargo build --release -p oxidepm-adapter-watch -p oxidepm-adapter-bundle
+target/release/oxidepm-adapter-bundle --out target/watch-bundle \
+    --target x86_64-unknown-linux-gnu --url-base https://example.org/adapters --sequence 1 \
+    watch:target/release/oxidepm-watch
 ```
 
+Use the archive digest from `target/watch-bundle/SHA256SUMS`:
+
+```sh
+oxidepm adapter import ./target/watch-bundle/watch-0.4.0-rc.3.tar.gz --sha256 <digest> --allow-reserved-name --enable
+```
+
+The bundle builder takes a catalog URL even for archives you import locally.
 The archives are the same bytes for the same inputs. The sequence number of an index must be higher
 than that of the last one published, and the index is valid for 90 days (`--valid-days`).
 
