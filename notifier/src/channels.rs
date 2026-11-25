@@ -24,7 +24,7 @@ pub fn budget(timeout: Duration) -> Duration {
 const DEFAULT_TELEGRAM_BASE: &str = "https://api.telegram.org";
 
 pub fn client(timeout: Duration) -> reqwest::Client {
-    reqwest::Client::builder()
+    oxidepm_fetch::http_client_builder()
         .connect_timeout(CONNECT_TIMEOUT.min(timeout))
         .timeout(timeout)
         // a redirect would send the secret path to a host the person did not name

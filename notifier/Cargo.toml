@@ -3,7 +3,7 @@ name = "oxidepm-adapter-notifier"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
-rust-version.workspace = true
+rust-version = "1.85"
 description = "OxidePM adapter: Telegram, Discord, Slack and webhook notifications"
 
 [[bin]]
@@ -14,6 +14,7 @@ path = "src/main.rs"
 oxidepm-adapter-sdk = { path = "../sdk" }
 oxidepm-adapter-proto = { workspace = true }
 oxidepm-core = { workspace = true }
+oxidepm-fetch = { path = "../../oxidepm/crates/oxidepm-fetch" }
 tokio = { workspace = true }
 async-trait = { workspace = true }
 serde = { workspace = true }
