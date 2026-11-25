@@ -1349,7 +1349,7 @@ checksum = "04744f49eae99ab78e0d5c0b603ab218f515ea8cfe5a456d7629ad883a3b6e7d"
 
 [[package]]
 name = "oxidepm-adapter-bundle"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "chrono",
  "flate2",
@@ -1365,7 +1365,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-check"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "async-trait",
  "oxidepm-adapter-proto",
@@ -1379,7 +1379,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-deploy"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "async-trait",
  "oxidepm-adapter-proto",
@@ -1393,7 +1393,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-exporter-prometheus"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "async-trait",
  "flate2",
@@ -1413,7 +1413,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-git-start"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "async-trait",
  "nix",
@@ -1431,7 +1431,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-init"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "async-trait",
  "oxidepm-adapter-proto",
@@ -1447,7 +1447,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-notifier"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1473,7 +1473,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-proto"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "base64 0.22.1",
  "blake2",
@@ -1490,7 +1490,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-runtime-go"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "oxidepm-adapter-proto",
  "oxidepm-adapter-sdk",
@@ -1503,7 +1503,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-runtime-node"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "oxidepm-adapter-proto",
  "oxidepm-adapter-sdk",
@@ -1516,7 +1516,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-runtime-python"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "oxidepm-adapter-proto",
  "oxidepm-adapter-sdk",
@@ -1530,7 +1530,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-runtime-rust"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "oxidepm-adapter-proto",
  "oxidepm-adapter-sdk",
@@ -1543,7 +1543,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-sdk"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "async-trait",
  "oxidepm-adapter-proto",
@@ -1554,7 +1554,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-ui-tui"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "async-trait",
  "crossterm",
@@ -1574,7 +1574,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-ui-web"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "async-trait",
  "axum",
@@ -1601,7 +1601,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-adapter-watch"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "async-trait",
  "glob",
@@ -1618,7 +1618,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-core"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "chrono",
  "cron",
@@ -1636,7 +1636,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-fetch"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "flate2",
  "reqwest",
@@ -1652,7 +1652,7 @@ dependencies = [
 
 [[package]]
 name = "oxidepm-runtime-testkit"
-version = "0.4.0-rc.5"
+version = "0.4.0-rc.6"
 dependencies = [
  "chrono",
  "flate2",

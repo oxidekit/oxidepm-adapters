@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "ui-tui",
-  "version": "0.4.0-rc.5",
+  "version": "0.4.0-rc.6",
   "kind": "tool",
   "summary": "The terminal dashboard for the apps OxidePM manages.",
   "description": "oxidepm monit opens a full-screen dashboard on your terminal: the apps with their state, CPU and memory, the details of the selected app, and its recent log lines. Stopping and restarting an app asks for y or n first. It can stop and restart apps (the lifecycle level), nothing else, and it runs only while the dashboard is open.",

@@ -288,7 +288,7 @@ target/release/oxidepm-adapter-bundle --out target/watch-bundle \
 Use the archive digest from `target/watch-bundle/SHA256SUMS`:
 
 ```sh
-oxidepm adapter import ./target/watch-bundle/watch-0.4.0-rc.5.tar.gz --sha256 <digest> --allow-reserved-name --enable
+oxidepm adapter import ./target/watch-bundle/watch-0.4.0-rc.6.tar.gz --sha256 <digest> --allow-reserved-name --enable
 ```
 
 The bundle builder takes a catalog URL even for archives you import locally.
