@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "notifier",
-  "version": "0.4.0-rc.3",
+  "version": "0.4.0-rc.4",
   "kind": "service",
   "summary": "Telegram, Discord, Slack and webhook notifications.",
   "description": "Sends a message to the channels you configure when an app starts, stops, restarts, crashes, loops, goes over its memory limit or fails its health check. It reads only those events and its own config.toml, and it never touches your apps.",

@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "watch",
-  "version": "0.4.0-rc.3",
+  "version": "0.4.0-rc.4",
   "kind": "service",
   "summary": "Restart an app when its files change.",
   "description": "Watches the directories an app lists under adapters.watch (paths, ignore, debounce_ms) and restarts that app, and only that app, after a trailing debounce window. It has no network, spawns no programs and writes nothing.",
