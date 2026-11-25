@@ -80,7 +80,7 @@ impl DirectoryWatches {
         let mut pending = vec![path.to_path_buf()];
         while let Some(dir) = pending.pop() {
             // The async task can be cancelled while this walk is on the blocking pool.
-            if self.events.upgrade().map_or(true, |send| send.is_closed()) {
+            if self.events.upgrade().is_none_or(|send| send.is_closed()) {
                 return;
             }
             if self.is_ignored(&dir) || !is_dir(&dir) {
