@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "runtime-go",
-  "version": "0.4.0-rc.1",
+  "version": "0.4.0-rc.2",
   "kind": "tool",
   "summary": "Run Go apps.",
   "description": "Provides the go runtime: the app is started with go run. It tells OxidePM what to run and OxidePM runs it; this adapter starts nothing, reads none of your files and has no network.",

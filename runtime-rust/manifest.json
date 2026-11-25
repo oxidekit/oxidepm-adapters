@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "runtime-rust",
-  "version": "0.4.0-rc.1",
+  "version": "0.4.0-rc.2",
   "kind": "tool",
   "summary": "Build and run Rust apps: a single file with rustc, a project with cargo.",
   "description": "Provides the rust runtime (one .rs file, compiled with rustc) and the cargo runtime (a Cargo project, built in release mode; cargo metadata tells which binary and where). It tells OxidePM which programs to run and OxidePM runs them, with your app's environment and a time limit; this adapter starts nothing itself, reads none of your files and has no network. The programs it asks for are cargo and rustc, and the binary they build.",

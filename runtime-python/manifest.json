@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "runtime-python",
-  "version": "0.4.0-rc.1",
+  "version": "0.4.0-rc.2",
   "kind": "tool",
   "summary": "Run Python apps, in the project's virtualenv when it has one.",
   "description": "Provides the python runtime. It tells OxidePM which interpreter to run (the project's venv or .venv when there is one, else python3, else python) and with what, and OxidePM runs it; to find the virtualenv it has OxidePM run the system's python for a moment. This adapter starts nothing itself, reads none of your files and has no network.",

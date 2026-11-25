@@ -245,7 +245,7 @@ target/release/oxidepm-adapter-bundle --out target/watch-bundle \
 ```
 
 Use the archive's digest from `target/watch-bundle/SHA256SUMS` with
-`oxidepm adapter import ./target/watch-bundle/watch-0.4.0-rc.1.tar.gz --sha256 <digest> --allow-reserved-name --enable`.
+`oxidepm adapter import ./target/watch-bundle/watch-0.4.0-rc.2.tar.gz --sha256 <digest> --allow-reserved-name --enable`.
 The bundle builder requires a catalog URL even for archives you import locally.
 
 - **watch** restarts an app after a change under a configured path. Add

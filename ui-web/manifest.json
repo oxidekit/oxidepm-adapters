@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "ui-web",
-  "version": "0.4.0-rc.1",
+  "version": "0.4.0-rc.2",
   "kind": "service",
   "summary": "The web API (REST and WebSocket) for the apps OxidePM manages.",
   "description": "Serves a REST API and a WebSocket on 127.0.0.1:9615 for showing, restarting, stopping and reloading the apps that list ui-web under adapters. Every request, loopback included, needs an access key that is generated into its config.toml the first time it starts; the Host and Origin headers are checked; the WebSocket carries the daemon's lifecycle events. By default it cannot create or delete apps or flush logs. There is no TLS: put a proxy in front for anything but a trusted network.",
