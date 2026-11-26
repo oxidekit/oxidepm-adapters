@@ -18,12 +18,6 @@ use sha2::{Digest, Sha256};
 
 pub const ADAPTER: &str = "exporter-prometheus";
 
-pub fn backup_path(path: &Path) -> PathBuf {
-    let mut name = path.file_name().unwrap().to_os_string();
-    name.push(".bak");
-    path.with_file_name(name)
-}
-
 pub fn hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()
@@ -367,10 +361,6 @@ impl Env {
         spec.restart_policy.restart_delay_ms = 20;
         spec.restart_policy.max_restart_delay_ms = 50;
         self.rpc(json!({ "type": "start", "spec": spec }))
-    }
-
-    pub fn stop_all(&self) {
-        let _ = self.rpc(json!({ "type": "stop", "selector": { "by": "all" } }));
     }
 
     pub fn delete_all(&self) {

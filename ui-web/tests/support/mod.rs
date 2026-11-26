@@ -208,10 +208,6 @@ impl Env {
         env
     }
 
-    pub fn daemon_pid(&self) -> i32 {
-        self.daemon.as_ref().expect("the daemon is running").id() as i32
-    }
-
     /// A daemon in a new home, nothing installed.
     pub fn bare(daemon_env: &[(&str, &str)]) -> Env {
         let bins = core_bins();
@@ -244,17 +240,6 @@ impl Env {
             env.daemon_stderr()
         );
         env
-    }
-
-    /// SIGTERM, and wait for the exit: what a reboot does.
-    pub fn shutdown_daemon(&mut self) {
-        if let Some(mut child) = self.daemon.take() {
-            let _ = nix::sys::signal::kill(
-                nix::unistd::Pid::from_raw(child.id() as i32),
-                nix::sys::signal::Signal::SIGTERM,
-            );
-            let _ = child.wait();
-        }
     }
 
     /// A working directory for the CLI and the apps: a verb is not run in a directory that holds
@@ -466,19 +451,6 @@ impl Env {
             }
         }
         pids
-    }
-
-    pub fn app_pids(&self) -> Vec<u32> {
-        let status = self.rpc(json!({ "type": "status" }));
-        status["apps"]
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter_map(|x| x["state"]["pid"].as_u64())
-                    .map(|p| p as u32)
-                    .collect()
-            })
-            .unwrap_or_default()
     }
 }
 

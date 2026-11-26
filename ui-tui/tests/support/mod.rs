@@ -207,10 +207,6 @@ impl Env {
         env
     }
 
-    pub fn daemon_pid(&self) -> i32 {
-        self.daemon.as_ref().expect("the daemon is running").id() as i32
-    }
-
     /// SIGTERM, and wait for the exit: what a reboot does.
     pub fn shutdown_daemon(&mut self) {
         if let Some(mut child) = self.daemon.take() {
@@ -533,13 +529,6 @@ impl Screen {
         self.master.as_raw_fd()
     }
 
-    pub fn slave_fd(&self) -> RawFd {
-        self.slave
-            .as_ref()
-            .expect("the slave is still ours")
-            .as_raw_fd()
-    }
-
     /// Type the bytes as the person would.
     pub fn type_keys(&mut self, keys: &str) {
         self.master.write_all(keys.as_bytes()).unwrap();
@@ -690,10 +679,6 @@ pub fn termios_of(fd: RawFd) -> libc::termios {
         );
         settings
     }
-}
-
-pub fn same_settings(a: &libc::termios, b: &libc::termios) -> bool {
-    (a.c_iflag, a.c_oflag, a.c_cflag, a.c_lflag) == (b.c_iflag, b.c_oflag, b.c_cflag, b.c_lflag)
 }
 
 /// Wait for a child to exit; killed (and failed) after `secs`.

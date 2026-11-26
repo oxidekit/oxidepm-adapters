@@ -347,10 +347,6 @@ impl Env {
         let _ = self.rpc(json!({ "type": "stop", "selector": { "by": "all" } }));
     }
 
-    pub fn delete_all(&self) {
-        let _ = self.rpc(json!({ "type": "delete", "selector": { "by": "all" } }));
-    }
-
     /// The pids of the running adapter processes (by their executable).
     pub fn adapter_pids(&self) -> Vec<i32> {
         let exe = self
