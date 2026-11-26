@@ -5,12 +5,13 @@
 
 #![allow(dead_code)]
 
+use std::collections::HashSet;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
-use std::sync::OnceLock;
+use std::sync::{LazyLock, Mutex, OnceLock};
 use std::time::{Duration, Instant};
 
 use serde_json::{json, Value};
@@ -479,13 +480,40 @@ impl Drop for Env {
 
 // ---- HTTP and WebSocket -------------------------------------------------------------------------
 
-/// A port nobody listens on now. (Another process could take it before the test does; the window is small.)
+/// The ports `free_port` has handed out in this test process.
+static HANDED_OUT: LazyLock<Mutex<HashSet<u16>>> = LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// A port nobody listens on now and that no earlier call in this process handed out: the tests
+/// run in parallel, and the kernel offers a port it has just seen again now and then. (Another
+/// process could take the port before the test does; the window is small.)
 pub fn free_port() -> u16 {
-    TcpListener::bind("127.0.0.1:0")
-        .expect("bind")
-        .local_addr()
-        .unwrap()
-        .port()
+    loop {
+        let port = {
+            let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
+            listener.local_addr().unwrap().port()
+        };
+        if HANDED_OUT.lock().unwrap().insert(port) {
+            return port;
+        }
+    }
+}
+
+#[test]
+fn a_port_is_not_handed_out_twice() {
+    // The kernel offers a port again soon after it was released, so among enough draws one comes
+    // back all but surely unless the helper remembers what it handed out.
+    let mut ports: Vec<u16> = std::thread::scope(|scope| {
+        let draws: Vec<_> = (0..8)
+            .map(|_| scope.spawn(|| (0..125).map(|_| free_port()).collect::<Vec<u16>>()))
+            .collect();
+        draws
+            .into_iter()
+            .flat_map(|draw| draw.join().unwrap())
+            .collect()
+    });
+    ports.sort_unstable();
+    let again = ports.windows(2).filter(|pair| pair[0] == pair[1]).count();
+    assert_eq!(again, 0);
 }
 
 pub struct Http {
