@@ -7,7 +7,8 @@ on macOS with the built-in `cmd` runtime.
 Install and enable an adapter from an OxidePM release with `oxidepm adapter import --bundled <name> --enable`.
 Review the permissions and confirm the grant at the prompt. Bundled imports work offline using
 the release checksums. For source builds, check out the core repository next to this one as
-`../oxidepm` so Cargo can resolve the shared crates.
+`../oxidepm` so Cargo can resolve the shared crates. Building needs Rust 1.85 or later, and 1.88 or
+later for `ui-tui`.
 
 | Directory | What |
 |---|---|
@@ -288,7 +289,7 @@ target/release/oxidepm-adapter-bundle --out target/watch-bundle \
 Use the archive digest from `target/watch-bundle/SHA256SUMS`:
 
 ```sh
-oxidepm adapter import ./target/watch-bundle/watch-0.4.0-rc.8.tar.gz --sha256 <digest> --allow-reserved-name --enable
+oxidepm adapter import ./target/watch-bundle/watch-0.4.0.tar.gz --sha256 <digest> --allow-reserved-name --enable
 ```
 
 The bundle builder takes a catalog URL even for archives you import locally.
