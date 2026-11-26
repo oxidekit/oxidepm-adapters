@@ -18,7 +18,4 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 oxidepm-runtime-testkit = { path = "../runtime-testkit" }
-oxidepm-core = { workspace = true }
-oxidepm-adapter-proto = { workspace = true }
-serde_json = { workspace = true }
 tempfile = "3.10"

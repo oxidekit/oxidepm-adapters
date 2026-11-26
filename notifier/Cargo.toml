@@ -33,9 +33,3 @@ tempfile = "3.10"
 tar = { version = "0.4", default-features = false }
 flate2 = "1.0"
 nix = { version = "0.28", features = ["signal", "process"] }
-sha2 = { workspace = true }
-hmac = { workspace = true }
-chrono = { workspace = true }
-serde_json = { workspace = true }
-oxidepm-core = { workspace = true }
-oxidepm-adapter-proto = { workspace = true }

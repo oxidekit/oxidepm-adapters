@@ -1640,9 +1640,7 @@ version = "0.4.0-rc.8"
 dependencies = [
  "oxidepm-adapter-proto",
  "oxidepm-adapter-sdk",
- "oxidepm-core",
  "oxidepm-runtime-testkit",
- "serde_json",
  "tempfile",
  "tokio",
 ]
@@ -1653,7 +1651,6 @@ version = "0.4.0-rc.8"
 dependencies = [
  "oxidepm-adapter-proto",
  "oxidepm-adapter-sdk",
- "oxidepm-core",
  "oxidepm-runtime-testkit",
  "serde_json",
  "tempfile",
@@ -1666,7 +1663,6 @@ version = "0.4.0-rc.8"
 dependencies = [
  "oxidepm-adapter-proto",
  "oxidepm-adapter-sdk",
- "oxidepm-core",
  "oxidepm-runtime-testkit",
  "serde_json",
  "shell-words",
@@ -1680,7 +1676,6 @@ version = "0.4.0-rc.8"
 dependencies = [
  "oxidepm-adapter-proto",
  "oxidepm-adapter-sdk",
- "oxidepm-core",
  "oxidepm-runtime-testkit",
  "serde_json",
  "tempfile",
