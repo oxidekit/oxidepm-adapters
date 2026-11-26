@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "deploy",
-  "version": "0.4.0-rc.7",
+  "version": "0.4.0-rc.8",
   "kind": "tool",
   "summary": "Deploy and inspect remote hosts over SSH.",
   "description": "Provides the deploy (git pull, optional post-deploy command, remote oxidepm restart) and diff (remote git log, status and diff stat) commands over SSH. It has no daemon write access and writes nothing locally.",
