@@ -23,7 +23,10 @@ pub async fn run_loop<B: Backend>(
     app: &mut App,
     daemon: &dyn Daemon,
     events: &mut mpsc::UnboundedReceiver<Event>,
-) -> io::Result<()> {
+) -> io::Result<()>
+where
+    B::Error: Send + Sync + 'static,
+{
     let status_request = || daemon.call(json!({ "type": "status" }));
     let action_request = |confirm: Confirm| async move {
         let answer = daemon.call(confirm.request()).await;
@@ -35,7 +38,11 @@ pub async fn run_loop<B: Backend>(
     let mut tick = tokio::time::interval_at(tokio::time::Instant::now() + TICK, TICK);
     tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
     loop {
-        terminal.draw(|f| view::ui(f, app))?;
+        terminal.draw(|f| view::ui(f, app)).map_err(|error| {
+            io::Error::other(error)
+                .downcast::<io::Error>()
+                .unwrap_or_else(|error| error)
+        })?;
         if app.quit {
             return Ok(());
         }
@@ -92,7 +99,10 @@ pub async fn run_guarded<B: Backend>(
     restore: impl FnMut(),
     daemon: &dyn Daemon,
     events: &mut mpsc::UnboundedReceiver<Event>,
-) -> io::Result<()> {
+) -> io::Result<()>
+where
+    B::Error: Send + Sync + 'static,
+{
     let _guard = Guard::new(restore);
     let mut app = App::new();
     run_loop(&mut terminal, &mut app, daemon, events).await
@@ -106,8 +116,9 @@ mod tests {
     use crossterm::event::{KeyCode, KeyEvent, KeyEventKind, KeyModifiers};
     use ratatui::backend::{Backend, ClearType, TestBackend, WindowSize};
     use ratatui::buffer::Cell;
-    use ratatui::layout::{Rect, Size};
+    use ratatui::layout::{Position, Size};
     use serde_json::{json, Value};
+    use std::convert::Infallible;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::Arc;
 
@@ -118,7 +129,13 @@ mod tests {
     /// A terminal that cannot be drawn on.
     struct Broken(TestBackend);
 
+    fn as_io_result<T>(result: Result<T, Infallible>) -> io::Result<T> {
+        result.map_err(|error| match error {})
+    }
+
     impl Backend for Broken {
+        type Error = io::Error;
+
         fn draw<'a, I>(&mut self, _content: I) -> io::Result<()>
         where
             I: Iterator<Item = (u16, u16, &'a Cell)>,
@@ -129,25 +146,25 @@ mod tests {
             ))
         }
         fn hide_cursor(&mut self) -> io::Result<()> {
-            self.0.hide_cursor()
+            as_io_result(self.0.hide_cursor())
         }
         fn show_cursor(&mut self) -> io::Result<()> {
-            self.0.show_cursor()
+            as_io_result(self.0.show_cursor())
         }
-        fn get_cursor(&mut self) -> io::Result<(u16, u16)> {
-            self.0.get_cursor()
+        fn get_cursor_position(&mut self) -> io::Result<Position> {
+            as_io_result(self.0.get_cursor_position())
         }
-        fn set_cursor(&mut self, x: u16, y: u16) -> io::Result<()> {
-            self.0.set_cursor(x, y)
+        fn set_cursor_position<P: Into<Position>>(&mut self, position: P) -> io::Result<()> {
+            as_io_result(self.0.set_cursor_position(position))
         }
         fn clear(&mut self) -> io::Result<()> {
-            self.0.clear()
+            as_io_result(self.0.clear())
         }
         fn clear_region(&mut self, clear_type: ClearType) -> io::Result<()> {
-            self.0.clear_region(clear_type)
+            as_io_result(self.0.clear_region(clear_type))
         }
-        fn size(&self) -> io::Result<Rect> {
-            self.0.size()
+        fn size(&self) -> io::Result<Size> {
+            as_io_result(self.0.size())
         }
         fn window_size(&mut self) -> io::Result<WindowSize> {
             Ok(WindowSize {
@@ -162,7 +179,7 @@ mod tests {
             })
         }
         fn flush(&mut self) -> io::Result<()> {
-            self.0.flush()
+            as_io_result(self.0.flush())
         }
     }
 

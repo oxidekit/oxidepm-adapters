@@ -21,7 +21,7 @@ pub fn ui(f: &mut Frame, app: &App) {
             Constraint::Min(3),    // main content
             Constraint::Length(3), // status line and help
         ])
-        .split(f.size());
+        .split(f.area());
 
     let titles = vec!["Processes", "Details", "Logs"];
     let tabs = Tabs::new(titles)
@@ -317,7 +317,7 @@ mod tests {
         (0..height)
             .map(|y| {
                 (0..width)
-                    .map(|x| buffer.get(x, y).symbol().to_string())
+                    .map(|x| buffer[(x, y)].symbol().to_string())
                     .collect::<String>()
             })
             .collect::<Vec<_>>()
@@ -338,6 +338,48 @@ mod tests {
             .env
             .insert("TOKEN".to_string(), "<redacted>".to_string());
         info
+    }
+
+    #[test]
+    fn the_process_table_keeps_its_layout_and_colours_after_resize() {
+        let app = busy_app(Tab::Processes);
+        let mut terminal = Terminal::new(TestBackend::new(80, 24)).unwrap();
+        terminal.draw(|frame| ui(frame, &app)).unwrap();
+        terminal.backend_mut().resize(40, 14);
+        terminal.draw(|frame| ui(frame, &app)).unwrap();
+
+        let buffer = terminal.backend().buffer();
+        let (rows, remainder) = buffer.content().as_chunks::<40>();
+        assert!(remainder.is_empty());
+        let rows: Vec<String> = rows
+            .iter()
+            .map(|row| row.iter().map(|cell| cell.symbol()).collect())
+            .collect();
+        assert_eq!(
+            rows.iter().map(|row| row.trim_end()).collect::<Vec<_>>(),
+            [
+                "",
+                " ┌OxidePM Monitor─────────────────────┐",
+                " │ Processes │ Details │ Logs         │",
+                " └────────────────────────────────────┘",
+                " ┌Processes───────────────────────────┐",
+                " │ID   Name            R P ↺ S C M U P│",
+                " │                                    │",
+                " │7    web             c 1 0 r 0 0 0 -│",
+                " │8    api             c 1 0 r 0 0 0 -│",
+                " └────────────────────────────────────┘",
+                " ┌────────────────────────────────────┐",
+                " │↑/↓: Select | s: Stop | r: Restart |│",
+                " └────────────────────────────────────┘",
+                "",
+            ]
+        );
+        assert_eq!(buffer[(3, 2)].fg, Color::Yellow);
+        assert_eq!(buffer[(3, 2)].modifier, Modifier::BOLD);
+        assert_eq!(buffer[(29, 7)].fg, Color::Green);
+        assert_eq!(buffer[(7, 7)].bg, Color::DarkGray);
+        assert_eq!(buffer[(7, 8)].bg, Color::Reset);
+        assert_eq!(buffer[(2, 11)].fg, Color::DarkGray);
     }
 
     #[test]
