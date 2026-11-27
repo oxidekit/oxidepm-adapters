@@ -60,5 +60,5 @@ jobs:
           trap 'rm -rf -- "$OXIDEPM_HOME"' EXIT
           export TMPDIR="$OXIDEPM_HOME/tmp"
           mkdir -p "$TMPDIR"
-          cargo fetch --manifest-path ../oxidepm/Cargo.toml
+          cargo fetch --locked --manifest-path ../oxidepm/Cargo.toml
           cargo test --workspace --no-fail-fast --locked
