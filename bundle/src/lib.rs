@@ -3,6 +3,9 @@
 //! `oxidepm adapter import --bundled` checks the index and archives against the checksum list.
 //! [`build`] also supplies the trusted comment for signing the index for online publication.
 
+#[cfg(not(target_os = "linux"))]
+compile_error!("The adapter bundle builder requires Linux");
+
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -10,10 +13,12 @@ use std::path::{Path, PathBuf};
 use chrono::{DateTime, Duration, Utc};
 use oxidepm_adapter_proto::{trusted_comment_for, Index, Manifest, ValidateCtx, INDEX_MAX_BYTES};
 use oxidepm_fetch::{extract_tar_gz, ExtractLimits};
+use rustix::fs::{renameat_with, RenameFlags, CWD};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 const CHECKSUMS: &str = "SHA256SUMS";
+const SUPPORTED_TARGETS: [&str; 2] = ["x86_64-unknown-linux-gnu", "aarch64-unknown-linux-gnu"];
 
 /// One adapter to put in the bundle: its crate directory (the manifest is there) and its built
 /// executable.
@@ -76,43 +81,6 @@ fn archive(manifest: &[u8], exec_name: &str, exe: &[u8]) -> Result<Vec<u8>, Stri
         .map_err(|e| format!("cannot write the archive: {e}"))
 }
 
-fn check_executable(
-    manifest: &Manifest,
-    root: &Path,
-    bytes: &[u8],
-    target: &str,
-) -> Result<(), String> {
-    let darwin = target.ends_with("-darwin") || target.ends_with("-macos");
-    if darwin == cfg!(target_os = "macos") {
-        return manifest.check_exec_file(root).map_err(|e| e.detail);
-    }
-
-    // The importer's executable check uses the OS it is running on. A cross-build
-    // must instead use the executable format of the target.
-    let native = if darwin {
-        matches!(
-            bytes.get(..4),
-            Some(
-                [0xfe, 0xed, 0xfa, 0xce]
-                    | [0xfe, 0xed, 0xfa, 0xcf]
-                    | [0xce, 0xfa, 0xed, 0xfe]
-                    | [0xcf, 0xfa, 0xed, 0xfe]
-                    | [0xca, 0xfe, 0xba, 0xbe]
-            )
-        )
-    } else {
-        bytes.starts_with(b"\x7fELF")
-    };
-    if native {
-        Ok(())
-    } else {
-        Err(format!(
-            "exec {:?} is not a native executable for {target}",
-            manifest.exec
-        ))
-    }
-}
-
 /// Check that replacing the output directory will only remove a previous bundle.
 fn check_previous_bundle(out: &Path) -> Result<(), String> {
     let path = out.join("index.json");
@@ -172,20 +140,20 @@ fn publish(staged: &Path, out: &Path) -> Result<(), String> {
         Ok(meta) if !meta.is_dir() => Err(format!("{} is not a bundle directory", out.display())),
         Ok(_) => {
             check_previous_bundle(out)?;
-            #[cfg(any(target_os = "linux", target_os = "macos"))]
-            {
-                use rustix::fs::{renameat_with, RenameFlags, CWD};
-                renameat_with(CWD, staged, CWD, out, RenameFlags::EXCHANGE)
-                    .map_err(|e| error(e.into()))
-            }
-            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
-            fs::rename(staged, out).map_err(error)
+            renameat_with(CWD, staged, CWD, out, RenameFlags::EXCHANGE).map_err(|e| error(e.into()))
         }
     }
 }
 
 /// Write the archives, `index.json` and `SHA256SUMS` into a new, empty or previously built bundle directory.
 pub fn build(out: &Path, inputs: &[Input], opts: &Options) -> Result<Built, String> {
+    if !SUPPORTED_TARGETS.contains(&opts.target.as_str()) {
+        return Err(format!(
+            "unsupported target {:?} (expected {})",
+            opts.target,
+            SUPPORTED_TARGETS.join(" or ")
+        ));
+    }
     if !opts.url_base.starts_with("https://") {
         return Err(format!(
             "the base address {:?} is not an https address",
@@ -242,8 +210,9 @@ pub fn build(out: &Path, inputs: &[Input], opts: &Options) -> Result<Built, Stri
         let unpacked =
             tempfile::tempdir_in(work.path()).map_err(|e| format!("cannot check {file}: {e}"))?;
         extract_tar_gz(&path, unpacked.path(), &limits).map_err(|e| format!("{file}: {e}"))?;
-        check_executable(&manifest, unpacked.path(), &exe, &opts.target)
-            .map_err(|e| format!("{}: {e}", input.exe.display()))?;
+        manifest
+            .check_exec_file(unpacked.path())
+            .map_err(|e| format!("{}: {}", input.exe.display(), e.detail))?;
         archives.push(out.join(&file));
         let archive_sha256 = hex(&archive);
         let raw: Value = serde_json::from_slice(&manifest_bytes).map_err(|e| e.to_string())?;
@@ -454,6 +423,28 @@ mod tests {
     }
 
     #[test]
+    fn unsupported_targets_are_refused_before_writing_a_bundle() {
+        let tmp = tempfile::tempdir().unwrap();
+        let input = adapter_dir(tmp.path(), "alpha", "0.1.0", "[]");
+        let out = tmp.path().join("out");
+        for target in [
+            "x86_64-pc-windows-gnu",
+            "aarch64-apple-darwin",
+            "x86_64-unknown-linux-musl",
+            "riscv64gc-unknown-linux-gnu",
+        ] {
+            let mut opts = options();
+            opts.target = target.into();
+            let error = build(&out, std::slice::from_ref(&input), &opts).unwrap_err();
+            assert!(
+                error.contains("unsupported target") && error.contains(target),
+                "{error}"
+            );
+            assert!(!out.exists());
+        }
+    }
+
+    #[test]
     fn a_manifest_that_import_would_reject_cannot_be_bundled() {
         let tmp = tempfile::tempdir().unwrap();
         let input = adapter_dir(tmp.path(), "alpha", "0.1.0", "[]");
@@ -481,7 +472,7 @@ mod tests {
         changed.push(b'!');
         std::fs::write(&input.exe, changed).unwrap();
         let mut invalid = options();
-        invalid.target = "bad target".into();
+        invalid.valid_for = Duration::zero();
         assert!(build(&out, std::slice::from_ref(&input), &invalid)
             .unwrap_err()
             .contains("index is not valid"));
