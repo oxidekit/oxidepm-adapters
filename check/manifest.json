@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "check",
-  "version": "0.5.0-rc.1",
+  "version": "0.5.0-rc.2",
   "kind": "tool",
   "summary": "Check if a project is ready to run (dependencies, env, ports).",
   "description": "Checks a project directory for dependencies, lockfiles, environment files and port conflicts. With --fix it installs Node dependencies and creates .env from a template; with --set-env it updates .env.",

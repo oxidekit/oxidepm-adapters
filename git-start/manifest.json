@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "git-start",
-  "version": "0.5.0-rc.1",
+  "version": "0.5.0-rc.2",
   "kind": "tool",
   "summary": "Clone or update a git repository and prepare it for oxidepm start.",
   "description": "Clones an HTTPS or SSH repository into its own state directory, prints the exact commit, and returns a launch spec for the CLI to start. It has read-only access to the daemon and writes only to its state directory. Subprocess execution is unrestricted so Git can use its transport helpers and optional npm installs can run. Dependency lifecycle scripts are disabled unless requested.",
