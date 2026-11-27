@@ -4,7 +4,10 @@
 
 mod support;
 
-use std::time::{Duration, Instant};
+use std::io::{self, ErrorKind};
+use std::net::TcpListener;
+use std::sync::{Arc, OnceLock};
+use std::time::Duration;
 
 use serde_json::{json, Value};
 use support::*;
@@ -578,36 +581,84 @@ fn a_rejected_formatting_is_sent_again_as_plain_text() {
 
 #[test]
 fn a_stuck_channel_does_not_delay_the_others() {
-    let mock = Mock::start();
-    let env = Env::new(&[]);
-    mock.respond_with(|req| {
-        if req.path.starts_with("/slow") {
-            Reply::ok().after(Duration::from_secs(8))
-        } else {
-            Reply::ok()
-        }
-    });
+    let telegram = Mock::start();
+    let webhook = TcpListener::bind("127.0.0.1:0").unwrap();
+    webhook.set_nonblocking(true).unwrap();
+    let env = Arc::new(Env::new(&[]));
     env.write_config(&format!(
-        "timeout_secs = 2\n[webhook]\nurl = \"{}\"\n[telegram]\nbot_token = \"{TOKEN}\"\nchat_id = \"{CHAT}\"\napi_base = \"{}\"\n",
-        mock.url("/slow"),
-        mock.base()
+        "timeout_secs = 10\nevents = [\"start\"]\n[webhook]\nurl = \"http://{}/slow\"\n[telegram]\nbot_token = \"{TOKEN}\"\nchat_id = \"{CHAT}\"\napi_base = \"{}\"\n",
+        webhook.local_addr().unwrap(),
+        telegram.base()
     ));
-    let began = Instant::now();
-    assert_eq!(env.start_app("web", "sleep 30", false)["type"], "started");
+    assert_eq!(
+        env.start_app("blocked", "sleep 60", false)["type"],
+        "started"
+    );
+
+    // Start the second app after the first webhook request is in flight, even if Telegram
+    // handled the first event before the webhook did.
+    let mut pending = None;
     assert!(
-        wait_for(10, || count_with(&mock, "Started") == 1),
-        "{:?}",
-        texts(&mock)
+        wait_for(20, || match webhook.accept() {
+            Ok((stream, _)) => {
+                pending = Some(stream);
+                true
+            }
+            Err(err) if err.kind() == ErrorKind::WouldBlock => false,
+            Err(err) => panic!("accepting the webhook connection: {err}"),
+        }),
+        "the first webhook did not connect"
+    );
+    let pending = pending.unwrap();
+    pending.set_nonblocking(true).unwrap();
+    assert!(
+        wait_for(20, || matches!(pending.peek(&mut [0]), Ok(1))),
+        "the first webhook did not send a request"
+    );
+    drop(webhook);
+
+    let webhook_timed_out = |log: &str| {
+        log.lines().any(|line| {
+            line.contains("channel=webhook")
+                && line.contains("event=start app=blocked failed: timed out")
+        })
+    };
+    let observed = Arc::new(OnceLock::new());
+    let receipt = Arc::clone(&observed);
+    let log_env = Arc::downgrade(&env);
+    telegram.respond_with(move |req| {
+        if req.json()["text"]
+            .as_str()
+            .is_some_and(|text| text.contains("Started") && text.contains("<code>web</code>"))
+        {
+            // The webhook never answers. Drain its request bytes to distinguish an open
+            // connection from one the notifier has already closed.
+            let connected = io::copy(&mut &pending, &mut io::sink())
+                .is_err_and(|err| err.kind() == ErrorKind::WouldBlock);
+            let timed_out = webhook_timed_out(&log_env.upgrade().unwrap().adapter_stderr());
+            let _ = receipt.set((connected, timed_out));
+        }
+        Reply::ok()
+    });
+
+    assert_eq!(env.start_app("web", "sleep 60", false)["type"], "started");
+    assert!(
+        wait_for(20, || observed.get().is_some()),
+        "Telegram did not receive the web start: {:?}\n{}",
+        texts(&telegram),
+        env.adapter_stderr()
+    );
+    let &(connected, timed_out) = observed.get().unwrap();
+    assert!(
+        connected,
+        "the webhook closed before Telegram received the start"
     );
     assert!(
-        began.elapsed() < Duration::from_millis(1800),
-        "Telegram waited for the stuck webhook: {:?}",
-        began.elapsed()
+        !timed_out,
+        "the webhook timeout was logged before Telegram received the start"
     );
-    // the stuck one is given up at the time limit and said so on the log
     assert!(
-        wait_for(10, || env.adapter_stderr().contains("channel=webhook")
-            && env.adapter_stderr().contains("timed out")),
+        wait_for(20, || webhook_timed_out(&env.adapter_stderr())),
         "{}",
         env.adapter_stderr()
     );
