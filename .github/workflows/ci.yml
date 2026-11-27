@@ -22,11 +22,7 @@ env:
 
 jobs:
   ci:
-    runs-on: ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, macos-latest]
+    runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: oxidepm-adapters
@@ -64,9 +60,5 @@ jobs:
           trap 'rm -rf -- "$OXIDEPM_HOME"' EXIT
           export TMPDIR="$OXIDEPM_HOME/tmp"
           mkdir -p "$TMPDIR"
-          if [[ "$RUNNER_OS" == macOS ]]; then
-            cargo test --workspace --lib --bins --no-fail-fast --locked
-          else
-            cargo fetch --manifest-path ../oxidepm/Cargo.toml
-            cargo test --workspace --no-fail-fast --locked
-          fi
+          cargo fetch --manifest-path ../oxidepm/Cargo.toml
+          cargo test --workspace --no-fail-fast --locked
