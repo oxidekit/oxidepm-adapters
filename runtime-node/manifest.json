@@ -1,7 +1,7 @@
 {
   "schema": 1,
   "name": "runtime-node",
-  "version": "0.4.0",
+  "version": "0.5.0-rc.1",
   "kind": "tool",
   "summary": "Run Node.js, npm, pnpm and yarn apps.",
   "description": "Provides the node, npm, pnpm and yarn runtimes. It tells OxidePM what to run for an app, and OxidePM runs it; this adapter starts nothing, reads none of your files and has no network.",
