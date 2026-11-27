@@ -1,8 +1,7 @@
 # OxidePM adapters
 
 OxidePM adapters are separate programs that `oxidepmd` starts, supervises and talks to over the
-adapter protocol (JSON lines on stdin and stdout). Adapters run only on Linux. The core runs
-on macOS with the built-in `cmd` runtime.
+adapter protocol (JSON lines on stdin and stdout). OxidePM runs on Linux (x86_64 and aarch64, glibc).
 
 Install and enable an adapter from an OxidePM release with `oxidepm adapter import --bundled <name> --enable`.
 Review the permissions and confirm the grant at the prompt. Bundled imports work offline using
@@ -270,7 +269,7 @@ distribution needs a signature.
 Use `--tag runtime` for the four runtimes, `--tag dev` for `watch`, `check`, and `init`,
 `--tag deploy` for `git-start` and `deploy`, `--tag ui` for `ui-web` and `ui-tui`,
 `--tag notifier` for `notifier`, or `--tag exporter` for `exporter-prometheus`.
-On Linux, the installer enables only the runtimes with `oxidepm adapter import --bundled --tag runtime --enable --yes`.
+The installer enables only the runtimes with `oxidepm adapter import --bundled --tag runtime --enable --yes`.
 `--yes` applies only to pure adapters. To enable an adapter with broader permissions
 without a terminal, import it first, review the grant, and use the printed
 `oxidepm adapter enable <name> --accept <fingerprint>` command.
