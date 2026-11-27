@@ -1,0 +1,6 @@
+LogInit: Running commandlet for SampleGame
+LogInit: Display: Starting commandlet execution
+FIXTURE_MARKER: PASS
+LogInit: Display: Success - 0 error(s), 0 warning(s)
+Execution of commandlet took: 0.43 seconds, PeakPhysMemoryMB=512 MB, PeakVirtMemoryMB=1024 MB
+LogExit: Exiting.

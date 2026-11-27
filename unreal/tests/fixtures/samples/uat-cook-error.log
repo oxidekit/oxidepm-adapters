@@ -1,0 +1,8 @@
+Running AutomationTool...
+Starting AutomationTool...
+********** COOK COMMAND STARTED **********
+LogCook: Error: Failed to load asset /Game/Maps/BrokenMap
+LogInit: Display: Failure - 1 error(s), 2 warning(s)
+Cook command time: 3.10 s
+ERROR: Cook failed.
+AutomationTool exiting with ExitCode=25 (Error_UnknownCookFailure)

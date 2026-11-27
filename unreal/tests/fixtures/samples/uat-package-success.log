@@ -1,0 +1,27 @@
+Running AutomationTool...
+Starting AutomationTool...
+Parsing command line: BuildCookRun -project=/workspace/SampleGame/SampleGame.uproject -platform=Linux -clientconfig=Development -build -cook -stage -pak -archive -archivedirectory=/workspace/SampleGame-pkg -unattended -nop4
+********** BUILD COMMAND STARTED **********
+Result: Succeeded
+********** BUILD COMMAND COMPLETED **********
+********** COOK COMMAND STARTED **********
+LogShaderCompilers: Display: Using 8 local workers for shader compilation
+LogShaderCompilers: Display: Shaders Compiled: 128
+LogShaderCompilers: Display: Exiting ShaderCompilingThread
+LogInit: Display: Success - 0 error(s), 0 warning(s)
+Execution of commandlet took: 12.40 seconds, PeakPhysMemoryMB=1024 MB, PeakVirtMemoryMB=2048 MB
+Cook command time: 14.20 s
+********** COOK COMMAND COMPLETED **********
+********** STAGE COMMAND STARTED **********
+LogIoStore: Display: Success
+Took 1.80s to run UnrealPak, ExitCode=0
+Stage command time: 2.30 s
+********** STAGE COMMAND COMPLETED **********
+********** ARCHIVE COMMAND STARTED **********
+Archiving to /workspace/SampleGame-pkg
+Archive command time: 0.05 s
+********** ARCHIVE COMMAND COMPLETED **********
+BuildCookRun time: 18.45 s
+BUILD SUCCESSFUL
+AutomationTool executed for 0h 0m 19s
+AutomationTool exiting with ExitCode=0 (Success)

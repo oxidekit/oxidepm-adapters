@@ -1,0 +1,107 @@
+#!/bin/sh
+# Fake ssh client fixture for host deploy and remote execution tests.
+# See runs/tests/fixtures/README.md for environment knobs.
+set -eu
+
+mode="${FAKE_MODE:-success}"
+exit_code="${FAKE_EXIT_CODE:-1}"
+mutex_hash="${FAKE_MUTEX_HASH:-0123456789abcdef0123456789abcdef01234567}"
+delay="${FAKE_DELAY_SECONDS:-0}"
+marker="${FAKE_MARKER:-REMOTE_OK}"
+log_file="${FAKE_SSH_LOG:-${FAKE_ARGS_LOG:-}}"
+
+if [ -n "$log_file" ]; then
+    mkdir -p "$(dirname "$log_file")"
+    {
+        printf 'fake-ssh'
+        for arg in "$@"; do
+            printf '\t%s' "$arg"
+        done
+        printf '\n'
+    } >> "$log_file"
+fi
+
+# Parse standard ssh options to separate <host> and <remote_command>.
+host=""
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --)
+            shift
+            break
+            ;;
+        -b|-c|-D|-E|-e|-F|-I|-i|-J|-L|-l|-m|-O|-o|-p|-Q|-R|-S|-W|-w)
+            if [ $# -ge 2 ]; then
+                shift 2
+            else
+                shift
+            fi
+            ;;
+        -*)
+            shift
+            ;;
+        *)
+            break
+            ;;
+    esac
+done
+
+if [ $# -gt 0 ]; then
+    host="$1"
+    shift
+fi
+remote_cmd="$*"
+
+if [ "$delay" != "0" ] && [ -n "$delay" ]; then
+    sleep "$delay"
+fi
+
+case "$mode" in
+    success)
+        if [ -n "${FAKE_SSH_STDOUT:-}" ]; then
+            printf '%s\n' "$FAKE_SSH_STDOUT"
+            if [ -n "${FAKE_SSH_STDERR:-}" ]; then
+                printf '%s\n' "$FAKE_SSH_STDERR" >&2
+            fi
+            exit 0
+        fi
+        if [ -n "${FAKE_HOST_ROOT:-}" ] && [ "${FAKE_SSH_RUN_LOCAL:-1}" != "0" ] && [ -n "$remote_cmd" ]; then
+            mkdir -p "$FAKE_HOST_ROOT"
+            (
+                cd "$FAKE_HOST_ROOT"
+                FAKE_REMOTE_HOST="$host" /bin/sh -c "$remote_cmd"
+            )
+            exit $?
+        fi
+        printf 'ssh(%s): %s\n' "${host:-unknown}" "${remote_cmd:-noop}"
+        printf '%s\n' "$marker"
+        if [ -n "${FAKE_FORBIDDEN_MARKER:-}" ]; then
+            printf '%s\n' "${FAKE_FORBIDDEN_MARKER}"
+        fi
+        exit 0
+        ;;
+    nonzero)
+        if [ -n "${FAKE_SSH_STDERR:-}" ]; then
+            printf '%s\n' "$FAKE_SSH_STDERR" >&2
+        else
+            printf 'ssh: connect to host %s failed (exit %s)\n' "${host:-unknown}" "$exit_code" >&2
+        fi
+        exit "$exit_code"
+        ;;
+    conflict)
+        printf 'A conflicting instance of Global\\UnrealBuildTool_Mutex_%s is already running.\n' "$mutex_hash"
+        exit 10
+        ;;
+    hang)
+        printf 'ssh(%s): connecting...\n' "${host:-unknown}"
+        printf 'FAKE_HANG_READY\n'
+        exec sleep "${FAKE_HANG_SECONDS:-300}"
+        ;;
+    missing-marker)
+        printf 'ssh(%s): %s\n' "${host:-unknown}" "${remote_cmd:-noop}"
+        exit 0
+        ;;
+    *)
+        printf 'fake-ssh: unknown FAKE_MODE: %s\n' "$mode" >&2
+        exit 2
+        ;;
+esac

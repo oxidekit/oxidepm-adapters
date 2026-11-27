@@ -1,0 +1,11 @@
+Log file: /workspace/logs/UBT-SampleGame-Linux-Development.txt
+Using bundled DotNet SDK version: 10.0.0
+Building SampleGame...
+[1/4] Compile Module.SampleGame.1.cpp
+[2/4] Link SampleGame
+[3/4] WriteMetadata SampleGame.version
+[4/4] WriteMetadata SampleGame.target
+Total time in Unreal Build Accelerator local executor: 42.15 seconds
+Output binary: /workspace/SampleGame/Binaries/Linux/SampleGame
+Result: Succeeded
+Total execution time: 45.02 seconds

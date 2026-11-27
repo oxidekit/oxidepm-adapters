@@ -1,0 +1,190 @@
+#!/bin/sh
+# Fake rsync client fixture for host deploy and sync tests.
+# See runs/tests/fixtures/README.md for environment knobs.
+set -eu
+
+mode="${FAKE_MODE:-success}"
+exit_code="${FAKE_EXIT_CODE:-1}"
+mutex_hash="${FAKE_MUTEX_HASH:-0123456789abcdef0123456789abcdef01234567}"
+delay="${FAKE_DELAY_SECONDS:-0}"
+marker="${FAKE_MARKER:-RSYNC_OK}"
+log_file="${FAKE_RSYNC_LOG:-${FAKE_ARGS_LOG:-}}"
+
+if [ -n "$log_file" ]; then
+    mkdir -p "$(dirname "$log_file")"
+    {
+        printf 'fake-rsync'
+        for arg in "$@"; do
+            printf '\t%s' "$arg"
+        done
+        printf '\n'
+    } >> "$log_file"
+fi
+
+if [ "$delay" != "0" ] && [ -n "$delay" ]; then
+    sleep "$delay"
+fi
+
+case "$mode" in
+    nonzero)
+        printf 'rsync error: simulated transfer failure (code %s)\n' "$exit_code" >&2
+        exit "$exit_code"
+        ;;
+    conflict)
+        printf 'A conflicting instance of Global\\UnrealBuildTool_Mutex_%s is already running.\n' "$mutex_hash"
+        exit 10
+        ;;
+    hang)
+        printf 'rsync: starting transfer...\n'
+        printf 'FAKE_HANG_READY\n'
+        exec sleep "${FAKE_HANG_SECONDS:-300}"
+        ;;
+    success|missing-marker)
+        ;;
+    *)
+        printf 'fake-rsync: unknown FAKE_MODE: %s\n' "$mode" >&2
+        exit 2
+        ;;
+esac
+
+# Parse flags and collect positional arguments (sources... destination).
+dry_run=0
+delete_dest=0
+pos_count=0
+# Store positional args safely by rebuilding $@ after options.
+# First pass counts options; second pass processes positionals.
+src_args=""
+dest=""
+skip_next=0
+for arg in "$@"; do
+    if [ "$skip_next" -eq 1 ]; then
+        skip_next=0
+        continue
+    fi
+    case "$arg" in
+        -e|--rsh|--exclude|--include|--filter|--chmod|--chown|--log-file)
+            skip_next=1
+            ;;
+        --dry-run|-n)
+            dry_run=1
+            ;;
+        --delete|--delete-after|--delete-during|--delete-before)
+            delete_dest=1
+            ;;
+        --*)
+            ;;
+        -*)
+            case "$arg" in
+                *n*) dry_run=1 ;;
+            esac
+            ;;
+        *)
+            pos_count=$((pos_count + 1))
+            ;;
+    esac
+done
+
+resolve_dest() {
+    raw="$1"
+    case "$raw" in
+        *:*)
+            remote_path="${raw#*:}"
+            if [ -z "${FAKE_HOST_ROOT:-}" ]; then
+                printf 'fake-rsync: FAKE_HOST_ROOT must be set for remote destination %s\n' "$raw" >&2
+                exit 2
+            fi
+            # Reject path traversal segments.
+            case "/$remote_path/" in
+                */../*)
+                    printf 'fake-rsync: refused path traversal in destination %s\n' "$raw" >&2
+                    exit 2
+                    ;;
+            esac
+            rel="${remote_path#/}"
+            if [ -z "$rel" ]; then
+                printf '%s' "$FAKE_HOST_ROOT"
+            else
+                printf '%s/%s' "$FAKE_HOST_ROOT" "$rel"
+            fi
+            ;;
+        *)
+            printf '%s' "$raw"
+            ;;
+    esac
+}
+
+if [ "$pos_count" -ge 2 ]; then
+    # Extract the final positional argument as destination.
+    idx=0
+    skip_next=0
+    for arg in "$@"; do
+        if [ "$skip_next" -eq 1 ]; then
+            skip_next=0
+            continue
+        fi
+        case "$arg" in
+            -e|--rsh|--exclude|--include|--filter|--chmod|--chown|--log-file)
+                skip_next=1
+                ;;
+            -*)
+                ;;
+            *)
+                idx=$((idx + 1))
+                if [ "$idx" -eq "$pos_count" ]; then
+                    dest="$arg"
+                fi
+                ;;
+        esac
+    done
+
+    target_dir="$(resolve_dest "$dest")"
+    if [ "$dry_run" -eq 0 ]; then
+        mkdir -p "$target_dir"
+        if [ "$delete_dest" -eq 1 ] && [ -d "$target_dir" ]; then
+            # Clear existing files inside target_dir without removing target_dir itself.
+            find "$target_dir" -mindepth 1 -maxdepth 1 -exec rm -rf {} +
+        fi
+        idx=0
+        skip_next=0
+        for arg in "$@"; do
+            if [ "$skip_next" -eq 1 ]; then
+                skip_next=0
+                continue
+            fi
+            case "$arg" in
+                -e|--rsh|--exclude|--include|--filter|--chmod|--chown|--log-file)
+                    skip_next=1
+                    ;;
+                -*)
+                    ;;
+                *)
+                    idx=$((idx + 1))
+                    if [ "$idx" -lt "$pos_count" ]; then
+                        case "$arg" in
+                            */)
+                                # Copy directory contents (rsync trailing-slash semantics).
+                                if [ -d "$arg" ]; then
+                                    cp -R "${arg}." "$target_dir/"
+                                fi
+                                ;;
+                            *)
+                                cp -R "$arg" "$target_dir/"
+                                ;;
+                        esac
+                    fi
+                    ;;
+            esac
+        done
+    fi
+    printf 'sent 1024 bytes  received 64 bytes  total size 1024\n'
+else
+    printf 'rsync: no transfer arguments supplied\n'
+fi
+
+if [ "$mode" = "success" ]; then
+    printf '%s\n' "$marker"
+    if [ -n "${FAKE_FORBIDDEN_MARKER:-}" ]; then
+        printf '%s\n' "${FAKE_FORBIDDEN_MARKER}"
+    fi
+fi
+exit 0

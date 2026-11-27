@@ -1,0 +1,100 @@
+#!/bin/sh
+# Fake UnrealBuildTool (UBT) fixture for tests.
+# See unreal/tests/fixtures/README.md for environment knobs.
+set -eu
+
+mode="${FAKE_MODE:-success}"
+exit_code="${FAKE_EXIT_CODE:-1}"
+mutex_hash="${FAKE_MUTEX_HASH:-0123456789abcdef0123456789abcdef01234567}"
+delay="${FAKE_DELAY_SECONDS:-0}"
+project="${FAKE_PROJECT:-SampleGame}"
+marker="${FAKE_MARKER:-Result: Succeeded}"
+log_file=""
+
+# Record arguments when requested.
+if [ -n "${FAKE_ARGS_LOG:-}" ]; then
+    {
+        printf 'fake-ubt'
+        for arg in "$@"; do
+            printf '\t%s' "$arg"
+        done
+        printf '\n'
+    } >> "$FAKE_ARGS_LOG"
+fi
+
+# Detect -log=<path> or -abslog=<path> if supplied.
+for arg in "$@"; do
+    case "$arg" in
+        -log=*) log_file="${arg#-log=}" ;;
+        -abslog=*) log_file="${arg#-abslog=}" ;;
+    esac
+done
+
+emit_line() {
+    printf '%s\n' "$1"
+    if [ -n "$log_file" ]; then
+        printf '%s\n' "$1" >> "$log_file"
+    fi
+}
+
+if [ -n "$log_file" ]; then
+    mkdir -p "$(dirname "$log_file")"
+    : > "$log_file"
+fi
+
+if [ "$delay" != "0" ] && [ -n "$delay" ]; then
+    sleep "$delay"
+fi
+
+case "$mode" in
+    success)
+        emit_line "Log file: ${log_file:-/workspace/logs/UBT-${project}-Linux-Development.txt}"
+        emit_line "Using bundled DotNet SDK version: 10.0.0"
+        emit_line "Building ${project}..."
+        emit_line "[1/3] Compile Module.${project}.cpp"
+        emit_line "[2/3] Link ${project}"
+        emit_line "[3/3] WriteMetadata ${project}.target"
+        emit_line "Total time in local executor: 0.42 seconds"
+        emit_line "Output binary: /workspace/${project}/Binaries/Linux/${project}"
+        emit_line "${marker}"
+        if [ -n "${FAKE_FORBIDDEN_MARKER:-}" ]; then
+            emit_line "${FAKE_FORBIDDEN_MARKER}"
+        fi
+        emit_line "Total execution time: 0.51 seconds"
+        exit 0
+        ;;
+    nonzero)
+        emit_line "Log file: ${log_file:-/workspace/logs/UBT-${project}-Linux-Development.txt}"
+        emit_line "Building ${project}..."
+        emit_line "[1/3] Compile Module.${project}.cpp"
+        emit_line "/workspace/${project}/Source/${project}/Main.cpp(42,10): error: use of undeclared identifier 'MissingSymbol'"
+        emit_line "Total time in local executor: 0.18 seconds"
+        emit_line "Result: Failed (OtherCompilationError)"
+        emit_line "Total execution time: 0.24 seconds"
+        exit "$exit_code"
+        ;;
+    conflict)
+        emit_line "A conflicting instance of Global\\UnrealBuildTool_Mutex_${mutex_hash} is already running."
+        exit 10
+        ;;
+    hang)
+        emit_line "Log file: ${log_file:-/workspace/logs/UBT-${project}-Linux-Development.txt}"
+        emit_line "Building ${project}..."
+        emit_line "FAKE_HANG_READY"
+        exec sleep "${FAKE_HANG_SECONDS:-300}"
+        ;;
+    missing-marker)
+        emit_line "Log file: ${log_file:-/workspace/logs/UBT-${project}-Linux-Development.txt}"
+        emit_line "Using bundled DotNet SDK version: 10.0.0"
+        emit_line "Building ${project}..."
+        emit_line "[1/3] Compile Module.${project}.cpp"
+        emit_line "[2/3] Link ${project}"
+        emit_line "[3/3] WriteMetadata ${project}.target"
+        emit_line "Total execution time: 0.48 seconds"
+        exit 0
+        ;;
+    *)
+        printf 'fake-ubt: unknown FAKE_MODE: %s\n' "$mode" >&2
+        exit 2
+        ;;
+esac

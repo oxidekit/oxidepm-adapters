@@ -1,0 +1,9 @@
+LogInit: Running DelayedAutoRegister Phase StartOfEnginePreInit
+LogCsvProfiler: Display: Metadata set : platform="Linux"
+LogCsvProfiler: Display: Metadata set : config="Development"
+LogCsvProfiler: Display: Metadata set : enginereleaseversion="5.5.0"
+LogGame: Display: Booted SampleGame
+FIXTURE_MARKER: PASS
+LogExit: Preparing to exit.
+LogExit: Game engine shut down
+LogExit: Exiting.

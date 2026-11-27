@@ -13,6 +13,8 @@ use std::time::{Duration, Instant};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
+pub mod fixtures;
+
 pub fn hex(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
         .iter()

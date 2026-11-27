@@ -1,0 +1,7 @@
+Log file: /workspace/logs/UBT-SampleGame-Linux-Development.txt
+Building SampleGame...
+[1/3] Compile Module.SampleGame.1.cpp
+/workspace/SampleGame/Source/SampleGame/Actor.cpp(88,12): error: no member named 'MissingMethod' in 'ASampleActor'
+Total time in Unreal Build Accelerator local executor: 3.12 seconds
+Result: Failed (OtherCompilationError)
+Total execution time: 4.05 seconds

@@ -1,0 +1,87 @@
+#!/bin/sh
+# Fake UnrealEditor-Cmd (commandlet) fixture for tests.
+# See unreal/tests/fixtures/README.md for environment knobs.
+set -eu
+
+mode="${FAKE_MODE:-success}"
+exit_code="${FAKE_EXIT_CODE:-1}"
+mutex_hash="${FAKE_MUTEX_HASH:-0123456789abcdef0123456789abcdef01234567}"
+delay="${FAKE_DELAY_SECONDS:-0}"
+project="${FAKE_PROJECT:-SampleGame}"
+marker="${FAKE_MARKER:-FIXTURE_MARKER: PASS}"
+log_file=""
+
+if [ -n "${FAKE_ARGS_LOG:-}" ]; then
+    {
+        printf 'fake-editor-cmd'
+        for arg in "$@"; do
+            printf '\t%s' "$arg"
+        done
+        printf '\n'
+    } >> "$FAKE_ARGS_LOG"
+fi
+
+for arg in "$@"; do
+    case "$arg" in
+        -log=*) log_file="${arg#-log=}" ;;
+        -abslog=*) log_file="${arg#-abslog=}" ;;
+    esac
+done
+
+emit_line() {
+    printf '%s\n' "$1"
+    if [ -n "$log_file" ]; then
+        printf '%s\n' "$1" >> "$log_file"
+    fi
+}
+
+if [ -n "$log_file" ]; then
+    mkdir -p "$(dirname "$log_file")"
+    : > "$log_file"
+fi
+
+if [ "$delay" != "0" ] && [ -n "$delay" ]; then
+    sleep "$delay"
+fi
+
+case "$mode" in
+    success)
+        emit_line "LogInit: Running commandlet for ${project}"
+        emit_line "LogInit: Display: Starting commandlet execution"
+        emit_line "${marker}"
+        if [ -n "${FAKE_FORBIDDEN_MARKER:-}" ]; then
+            emit_line "${FAKE_FORBIDDEN_MARKER}"
+        fi
+        emit_line "LogInit: Display: Success - 0 error(s), 0 warning(s)"
+        emit_line "Execution of commandlet took: 0.43 seconds, PeakPhysMemoryMB=512 MB, PeakVirtMemoryMB=1024 MB"
+        emit_line "LogExit: Exiting."
+        exit 0
+        ;;
+    nonzero)
+        emit_line "LogInit: Running commandlet for ${project}"
+        emit_line "LogCommandlet: Error: Validation failed for /Game/Assets/BrokenAsset"
+        emit_line "LogInit: Display: Failure - 1 error(s), 0 warning(s)"
+        emit_line "LogExit: Exiting."
+        exit "$exit_code"
+        ;;
+    conflict)
+        emit_line "A conflicting instance of Global\\UnrealBuildTool_Mutex_${mutex_hash} is already running."
+        exit 10
+        ;;
+    hang)
+        emit_line "LogInit: Running commandlet for ${project}"
+        emit_line "FAKE_HANG_READY"
+        exec sleep "${FAKE_HANG_SECONDS:-300}"
+        ;;
+    missing-marker)
+        emit_line "LogInit: Running commandlet for ${project}"
+        emit_line "LogInit: Display: Starting commandlet execution"
+        emit_line "Execution of commandlet took: 0.39 seconds, PeakPhysMemoryMB=512 MB, PeakVirtMemoryMB=1024 MB"
+        emit_line "LogExit: Exiting."
+        exit 0
+        ;;
+    *)
+        printf 'fake-editor-cmd: unknown FAKE_MODE: %s\n' "$mode" >&2
+        exit 2
+        ;;
+esac

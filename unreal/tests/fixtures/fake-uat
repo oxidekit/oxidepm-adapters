@@ -1,0 +1,126 @@
+#!/bin/sh
+# Fake Unreal AutomationTool (UAT / BuildCookRun) fixture for tests.
+# See unreal/tests/fixtures/README.md for environment knobs.
+set -eu
+
+mode="${FAKE_MODE:-success}"
+exit_code="${FAKE_EXIT_CODE:-1}"
+mutex_hash="${FAKE_MUTEX_HASH:-0123456789abcdef0123456789abcdef01234567}"
+delay="${FAKE_DELAY_SECONDS:-0}"
+project="${FAKE_PROJECT:-SampleGame}"
+marker="${FAKE_MARKER:-BUILD SUCCESSFUL}"
+log_file=""
+archive_dir=""
+
+if [ -n "${FAKE_ARGS_LOG:-}" ]; then
+    {
+        printf 'fake-uat'
+        for arg in "$@"; do
+            printf '\t%s' "$arg"
+        done
+        printf '\n'
+    } >> "$FAKE_ARGS_LOG"
+fi
+
+for arg in "$@"; do
+    case "$arg" in
+        -log=*) log_file="${arg#-log=}" ;;
+        -abslog=*) log_file="${arg#-abslog=}" ;;
+        -archivedirectory=*) archive_dir="${arg#-archivedirectory=}" ;;
+    esac
+done
+
+emit_line() {
+    printf '%s\n' "$1"
+    if [ -n "$log_file" ]; then
+        printf '%s\n' "$1" >> "$log_file"
+    fi
+}
+
+if [ -n "$log_file" ]; then
+    mkdir -p "$(dirname "$log_file")"
+    : > "$log_file"
+fi
+
+if [ "$delay" != "0" ] && [ -n "$delay" ]; then
+    sleep "$delay"
+fi
+
+case "$mode" in
+    success)
+        emit_line "Running AutomationTool..."
+        emit_line "Starting AutomationTool..."
+        emit_line "Parsing command line: BuildCookRun -project=/workspace/${project}/${project}.uproject -platform=Linux"
+        emit_line "********** BUILD COMMAND STARTED **********"
+        emit_line "Result: Succeeded"
+        emit_line "********** BUILD COMMAND COMPLETED **********"
+        emit_line "********** COOK COMMAND STARTED **********"
+        emit_line "LogShaderCompilers: Display: Using 8 local workers for shader compilation"
+        emit_line "LogShaderCompilers: Display: Shaders Compiled: 128"
+        emit_line "LogInit: Display: Success - 0 error(s), 0 warning(s)"
+        emit_line "Cook command time: 1.20 s"
+        emit_line "********** COOK COMMAND COMPLETED **********"
+        emit_line "********** STAGE COMMAND STARTED **********"
+        emit_line "LogIoStore: Display: Success"
+        emit_line "Took 0.35s to run UnrealPak, ExitCode=0"
+        emit_line "Stage command time: 0.40 s"
+        emit_line "********** STAGE COMMAND COMPLETED **********"
+        emit_line "********** ARCHIVE COMMAND STARTED **********"
+        if [ -n "$archive_dir" ]; then
+            mkdir -p "${archive_dir}/Linux/${project}/Content/Paks"
+            printf 'fake-pak-header\n' > "${archive_dir}/Linux/${project}/Content/Paks/${project}-Linux.pak"
+            emit_line "Archiving to ${archive_dir}"
+        else
+            emit_line "Archiving to /workspace/${project}-pkg"
+        fi
+        emit_line "Archive command time: 0.05 s"
+        emit_line "********** ARCHIVE COMMAND COMPLETED **********"
+        emit_line "BuildCookRun time: 1.85 s"
+        emit_line "${marker}"
+        if [ -n "${FAKE_FORBIDDEN_MARKER:-}" ]; then
+            emit_line "${FAKE_FORBIDDEN_MARKER}"
+        fi
+        emit_line "AutomationTool executed for 0h 0m 2s"
+        emit_line "AutomationTool exiting with ExitCode=0 (Success)"
+        exit 0
+        ;;
+    nonzero)
+        emit_line "Running AutomationTool..."
+        emit_line "Starting AutomationTool..."
+        emit_line "********** COOK COMMAND STARTED **********"
+        emit_line "LogCook: Error: Failed to load asset /Game/Maps/MissingMap"
+        emit_line "LogInit: Display: Failure - 1 error(s), 0 warning(s)"
+        emit_line "Cook command time: 0.50 s"
+        emit_line "ERROR: Cook failed."
+        emit_line "AutomationTool exiting with ExitCode=${exit_code} (Error_UnknownCookFailure)"
+        exit "$exit_code"
+        ;;
+    conflict)
+        emit_line "Running AutomationTool..."
+        emit_line "********** BUILD COMMAND STARTED **********"
+        emit_line "A conflicting instance of Global\\UnrealBuildTool_Mutex_${mutex_hash} is already running."
+        emit_line "AutomationTool exiting with ExitCode=10 (Error_ConflictingInstance)"
+        exit 10
+        ;;
+    hang)
+        emit_line "Running AutomationTool..."
+        emit_line "********** COOK COMMAND STARTED **********"
+        emit_line "FAKE_HANG_READY"
+        exec sleep "${FAKE_HANG_SECONDS:-300}"
+        ;;
+    missing-marker)
+        emit_line "Running AutomationTool..."
+        emit_line "Starting AutomationTool..."
+        emit_line "********** BUILD COMMAND STARTED **********"
+        emit_line "********** BUILD COMMAND COMPLETED **********"
+        emit_line "********** COOK COMMAND STARTED **********"
+        emit_line "Cook command time: 1.10 s"
+        emit_line "********** COOK COMMAND COMPLETED **********"
+        emit_line "AutomationTool executed for 0h 0m 1s"
+        exit 0
+        ;;
+    *)
+        printf 'fake-uat: unknown FAKE_MODE: %s\n' "$mode" >&2
+        exit 2
+        ;;
+esac
