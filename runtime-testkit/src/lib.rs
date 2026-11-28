@@ -3,7 +3,9 @@
 //! private home for each test, and adapters imported from an installed release bundle or by
 //! their pinned hashes.
 
+use std::fs::{self, DirBuilder, Permissions};
 use std::io::{BufRead, BufReader, Write};
+use std::os::unix::fs::{DirBuilderExt, PermissionsExt};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -68,6 +70,7 @@ pub fn core_bins() -> &'static CoreBins {
                 "-p",
                 "oxidepm-sandbox",
                 "--offline",
+                "--locked",
                 "--quiet",
             ])
             .current_dir(&core)
@@ -161,6 +164,23 @@ impl Run {
     pub fn all(&self) -> String {
         format!("{}{}", self.stdout, self.stderr)
     }
+
+    fn missing_enforcement(&self, adapter: &str) -> bool {
+        if self.code == 0 {
+            return false;
+        }
+        let error = self.stderr.trim();
+        let refusal =
+            format!("Error: E_ADAPTER_INVALID: {adapter} requires the sandbox to enforce ");
+        let selftest = format!(
+            "Error: E_ADAPTER_UNAVAILABLE: the sandbox self-test of '{adapter}' failed: oxidepm-sandbox: this system cannot enforce "
+        );
+        (error.starts_with(&refusal)
+            && error.contains(", which this machine cannot (")
+            && error.ends_with(". If you accept that, pass --allow-unenforced"))
+            || (error.starts_with(&selftest)
+                && error.ends_with("); the adapter requires it. Enable it with --allow-unenforced to run it anyway"))
+    }
 }
 
 pub struct Env {
@@ -174,7 +194,40 @@ pub struct Env {
 struct Bundle {
     dir: PathBuf,
     bins: CoreBins,
+    single_adapter: Option<String>,
     _scratch: tempfile::TempDir,
+}
+
+fn private_tempdir() -> tempfile::TempDir {
+    let dir = tempfile::Builder::new()
+        .permissions(Permissions::from_mode(0o700))
+        .tempdir()
+        .expect("create a private tempdir");
+    // Creation can lose owner bits to the umask or an inherited ACL.
+    fs::set_permissions(dir.path(), Permissions::from_mode(0o700))
+        .expect("set tempdir permissions");
+    dir
+}
+
+fn create_home(dir: &Path) -> PathBuf {
+    let home = dir.join("home");
+    DirBuilder::new()
+        .mode(0o700)
+        .create(&home)
+        .expect("create a private home");
+    fs::set_permissions(&home, Permissions::from_mode(0o700)).expect("set home permissions");
+    home
+}
+
+fn core_command(binary: &Path) -> Command {
+    let mut command = Command::new(binary);
+    command
+        .env_clear()
+        .env("PATH", std::env::var("PATH").unwrap_or_default());
+    if let Some(abi) = std::env::var_os("OXIDEPM_TEST_LANDLOCK_ABI") {
+        command.env("OXIDEPM_TEST_LANDLOCK_ABI", abi);
+    }
+    command
 }
 
 impl Env {
@@ -193,7 +246,7 @@ impl Env {
 
     /// A daemon in a new home with a release bundle installed alongside the core binaries.
     pub fn with_bundle(adapters: &[&Adapter], daemon_env: &[(&str, &str)]) -> Env {
-        let scratch = tempfile::tempdir().expect("tempdir");
+        let scratch = private_tempdir();
         let dir = scratch.path().join("share/oxidepm/adapters");
         let inputs: Vec<oxidepm_adapter_bundle::Input> = adapters
             .iter()
@@ -239,6 +292,10 @@ impl Env {
                     daemon: bin.join("oxidepmd"),
                     cli: bin.join("oxidepm"),
                 },
+                single_adapter: match adapters {
+                    [adapter] => Some(adapter.name.clone()),
+                    _ => None,
+                },
                 _scratch: scratch,
             }),
         )
@@ -249,14 +306,11 @@ impl Env {
             Some(bundle) => &bundle.bins,
             None => core_bins(),
         };
-        let dir = tempfile::tempdir().expect("tempdir");
-        let home = dir.path().join("home");
-        std::fs::create_dir_all(&home).unwrap();
+        let dir = private_tempdir();
+        let home = create_home(dir.path());
         let stderr = std::fs::File::create(home.join("daemon-test.stderr")).unwrap();
-        let mut command = Command::new(&bins.daemon);
+        let mut command = core_command(&bins.daemon);
         command
-            .env_clear()
-            .env("PATH", std::env::var("PATH").unwrap_or_default())
             .envs(daemon_env.iter().copied())
             .env("OXIDEPM_HOME", &home)
             .env("HOME", &home)
@@ -368,16 +422,58 @@ impl Env {
         );
     }
 
+    /// Run a test command, retrying an enable if a required sandbox feature is unavailable.
     pub fn cli(&self, args: &[&str]) -> Run {
+        let attempt = self.cli_raw(args);
+        let (name, consent) = match args {
+            ["adapter", "enable", name, options @ ..]
+                if !options.contains(&"--allow-unenforced") =>
+            {
+                (*name, options)
+            }
+            ["adapter", "import", options @ ..]
+                if ["--bundled", "--enable", "--yes"]
+                    .iter()
+                    .all(|flag| options.contains(flag)) =>
+            {
+                // The import already installed this adapter. With a larger bundle it could
+                // have stopped partway through, so only retry for a single-adapter fixture.
+                let Some(name) = self
+                    .bundle
+                    .as_ref()
+                    .and_then(|b| b.single_adapter.as_deref())
+                else {
+                    return attempt;
+                };
+                (name, ["--yes"].as_slice())
+            }
+            _ => return attempt,
+        };
+        if !attempt.missing_enforcement(name) {
+            return attempt;
+        }
+
+        let mut args = vec!["adapter", "enable", name, "--allow-unenforced"];
+        args.extend_from_slice(consent);
+        let mut enabled = self.cli_raw(&args);
+        if enabled.code == 0 {
+            eprintln!(
+                "Running adapter {name} with unenforced sandbox requirements (--allow-unenforced)."
+            );
+        }
+        enabled.stdout.insert_str(0, &attempt.stdout);
+        enabled
+    }
+
+    /// Run the CLI once. Use this when asserting the CLI's response to an enable request.
+    pub fn cli_raw(&self, args: &[&str]) -> Run {
         let bins = match &self.bundle {
             Some(bundle) => &bundle.bins,
             None => core_bins(),
         };
-        let mut command = Command::new(&bins.cli);
+        let mut command = core_command(&bins.cli);
         command
             .args(args)
-            .env_clear()
-            .env("PATH", std::env::var("PATH").unwrap_or_default())
             .env("HOME", &self.home)
             .env("OXIDEPM_HOME", &self.home)
             .current_dir(self.project())
@@ -542,6 +638,41 @@ impl Drop for Env {
         }
         let _ = child.kill();
         let _ = child.wait();
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn creates_a_private_home() {
+    let dir = private_tempdir();
+    let home = create_home(dir.path());
+    for path in [dir.path(), &home] {
+        assert_eq!(
+            fs::metadata(path).unwrap().permissions().mode() & 0o777,
+            0o700
+        );
+    }
+}
+
+#[cfg(test)]
+#[test]
+fn retries_only_when_required_sandbox_enforcement_is_unavailable() {
+    let refusal = "Error: E_ADAPTER_INVALID: init requires the sandbox to enforce network, which this machine cannot (landlock abi 8, seccomp). The kernel cannot restrict connections to pathname Unix sockets. If you accept that, pass --allow-unenforced\n";
+    let selftest = "Error: E_ADAPTER_UNAVAILABLE: the sandbox self-test of 'init' failed: oxidepm-sandbox: this system cannot enforce fs_write (landlock: no, seccomp: yes); the adapter requires it. Enable it with --allow-unenforced to run it anyway\n";
+    for (code, stderr, expected) in [
+        (1, refusal, true),
+        (1, selftest, true),
+        (0, refusal, false),
+        (1, "Error: E_ADAPTER_INVALID: Enabling init requires explicit consent. Pass --accept fingerprint or --allow-unenforced", false),
+        (1, "Error: E_ADAPTER_UNAVAILABLE: the sandbox self-test of 'init' failed: the launcher timed out", false),
+    ] {
+        let run = Run {
+            code,
+            stdout: String::new(),
+            stderr: stderr.to_string(),
+        };
+        assert_eq!(run.missing_enforcement("init"), expected, "{stderr}");
+        assert!(!run.missing_enforcement("watch"), "{stderr}");
     }
 }
 
