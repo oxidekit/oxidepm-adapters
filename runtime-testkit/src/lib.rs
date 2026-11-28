@@ -457,7 +457,9 @@ impl Env {
         args.extend_from_slice(consent);
         let mut enabled = self.cli_raw(&args);
         if enabled.code == 0 {
-            eprintln!(
+            // Keep the notice visible when the test runner captures successful test output.
+            let _ = writeln!(
+                std::io::stderr().lock(),
                 "Running adapter {name} with unenforced sandbox requirements (--allow-unenforced)."
             );
         }
