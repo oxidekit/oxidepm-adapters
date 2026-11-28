@@ -169,17 +169,18 @@ impl Run {
         if self.code == 0 {
             return false;
         }
-        let error = self.stderr.trim();
         let refusal =
             format!("Error: E_ADAPTER_INVALID: {adapter} requires the sandbox to enforce ");
         let selftest = format!(
             "Error: E_ADAPTER_UNAVAILABLE: the sandbox self-test of '{adapter}' failed: oxidepm-sandbox: this system cannot enforce "
         );
-        (error.starts_with(&refusal)
-            && error.contains(", which this machine cannot (")
-            && error.ends_with(". If you accept that, pass --allow-unenforced"))
-            || (error.starts_with(&selftest)
-                && error.ends_with("); the adapter requires it. Enable it with --allow-unenforced to run it anyway"))
+        self.stderr.lines().map(str::trim).any(|error| {
+            (error.starts_with(&refusal)
+                && error.contains(", which this machine cannot (")
+                && error.ends_with(". If you accept that, pass --allow-unenforced"))
+                || (error.starts_with(&selftest)
+                    && error.ends_with("); the adapter requires it. Enable it with --allow-unenforced to run it anyway"))
+        })
     }
 }
 
@@ -338,6 +339,15 @@ impl Env {
     /// The directory of the release bundle, for an environment made with `with_bundle`.
     pub fn bundle_dir(&self) -> Option<&Path> {
         self.bundle.as_ref().map(|b| b.dir.as_path())
+    }
+
+    /// Create the adapter's private state directory so a test can write its configuration.
+    pub fn adapter_state_dir(&self, name: &str) -> PathBuf {
+        let paths = oxidepm_core::Paths::new(&self.home);
+        paths
+            .ensure_adapter_state_dir(name)
+            .expect("create a private adapter state directory");
+        paths.adapter_state(name)
     }
 
     /// The pid of the daemon.
@@ -654,6 +664,21 @@ fn creates_a_private_home() {
             0o700
         );
     }
+}
+
+#[cfg(test)]
+#[test]
+fn detects_missing_enforcement_alongside_warnings() {
+    let run = Run {
+        code: 1,
+        stdout: String::new(),
+        stderr: concat!(
+            " WARN oxidepm_core::paths: adapters had mode 0755; restricting it to 0700\n",
+            "Error: E_ADAPTER_INVALID: notifier requires the sandbox to enforce network, which this machine cannot (landlock abi 8, seccomp). The kernel cannot restrict connections to pathname Unix sockets. If you accept that, pass --allow-unenforced\n",
+        )
+        .to_string(),
+    };
+    assert!(run.missing_enforcement("notifier"));
 }
 
 #[cfg(test)]

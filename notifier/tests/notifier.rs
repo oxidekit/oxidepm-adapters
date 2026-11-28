@@ -46,8 +46,7 @@ fn bundled_notifier_sends_a_lifecycle_webhook() {
         env!("CARGO_BIN_EXE_oxidepm-notifier"),
     );
     let mut env = BundleEnv::with_bundle(&[&adapter], &[]);
-    let state = env.home.join("adapters/state/notifier");
-    std::fs::create_dir_all(&state).unwrap();
+    let state = env.adapter_state_dir("notifier");
     std::fs::write(
         state.join("config.toml"),
         format!("[webhook]\nurl = \"{}\"\n", mock.url("/bundled")),

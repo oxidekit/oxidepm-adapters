@@ -75,8 +75,7 @@ fn bundled_web_adapter_serves_authenticated_status() {
         env!("CARGO_BIN_EXE_oxidepm-ui-web"),
     );
     let mut env = BundleEnv::with_bundle(&[&adapter], &[]);
-    let state = env.home.join("adapters/state/ui-web");
-    std::fs::create_dir_all(&state).unwrap();
+    let state = env.adapter_state_dir("ui-web");
     std::fs::write(
         state.join("config.toml"),
         format!("listen = \"127.0.0.1:{port}\"\nkey = \"{KEY}\"\n"),
