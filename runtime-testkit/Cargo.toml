@@ -8,7 +8,7 @@ description = "What the integration tests of the runtime adapters share: the rea
 publish = false
 
 [dependencies]
-oxidepm-adapter-proto = { workspace = true }
+oxidepm-adapter-proto = { workspace = true, features = ["test-support"] }
 oxidepm-adapter-bundle = { path = "../bundle" }
 chrono = { workspace = true }
 oxidepm-core = { workspace = true }

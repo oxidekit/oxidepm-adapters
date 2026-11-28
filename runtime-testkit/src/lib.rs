@@ -12,6 +12,7 @@ use std::process::{Child, Command, Stdio};
 use std::sync::OnceLock;
 use std::time::{Duration, Instant};
 
+use oxidepm_adapter_proto::signing::{bundle_trusted_comment, testkeys::TestKey};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
@@ -55,39 +56,52 @@ pub fn core_dir() -> PathBuf {
 /// `OXIDEPM_CORE_TARGET_DIR`, else the core repository's own target directory.
 pub fn core_bins() -> &'static CoreBins {
     static BINS: OnceLock<CoreBins> = OnceLock::new();
-    BINS.get_or_init(|| {
-        let core = core_dir();
-        let target = std::env::var_os("OXIDEPM_CORE_TARGET_DIR")
-            .map(PathBuf::from)
-            .unwrap_or_else(|| core.join("target"));
-        let output = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
-            .args([
-                "build",
-                "-p",
-                "oxidepmd",
-                "-p",
-                "oxidepm",
-                "-p",
-                "oxidepm-sandbox",
-                "--offline",
-                "--locked",
-                "--quiet",
-            ])
-            .current_dir(&core)
-            .env("CARGO_TARGET_DIR", &target)
-            .output()
-            .expect("run cargo to build the core");
-        assert!(
-            output.status.success(),
-            "building the core failed:\n{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let debug = target.join("debug");
-        CoreBins {
-            daemon: debug.join("oxidepmd"),
-            cli: debug.join("oxidepm"),
-        }
-    })
+    BINS.get_or_init(|| build_core(false))
+}
+
+fn bundle_core_bins() -> &'static CoreBins {
+    static BINS: OnceLock<CoreBins> = OnceLock::new();
+    BINS.get_or_init(|| build_core(true))
+}
+
+fn build_core(with_bundle_support: bool) -> CoreBins {
+    let core = core_dir();
+    let mut target = std::env::var_os("OXIDEPM_CORE_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| core.join("target"));
+    let mut command = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()));
+    command.args([
+        "build",
+        "-p",
+        "oxidepmd",
+        "-p",
+        "oxidepm",
+        "-p",
+        "oxidepm-sandbox",
+        "--offline",
+        "--locked",
+        "--quiet",
+    ]);
+    if with_bundle_support {
+        // Keep binaries that trust fixture keys separate from the default test builds.
+        target.push("bundled-tests");
+        command.args(["--features", "test-support,test-hooks"]);
+    }
+    let output = command
+        .current_dir(&core)
+        .env("CARGO_TARGET_DIR", &target)
+        .output()
+        .expect("run cargo to build the core");
+    assert!(
+        output.status.success(),
+        "building the core failed:\n{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let debug = target.join("debug");
+    CoreBins {
+        daemon: debug.join("oxidepmd"),
+        cli: debug.join("oxidepm"),
+    }
 }
 
 // ---- the packaged adapter ---------------------------------------------------------------------
@@ -195,6 +209,7 @@ pub struct Env {
 struct Bundle {
     dir: PathBuf,
     bins: CoreBins,
+    public_key: String,
     single_adapter: Option<String>,
     _scratch: tempfile::TempDir,
 }
@@ -220,7 +235,7 @@ fn create_home(dir: &Path) -> PathBuf {
     home
 }
 
-fn core_command(binary: &Path) -> Command {
+fn core_command(binary: &Path, bundle: Option<&Bundle>) -> Command {
     let mut command = Command::new(binary);
     command
         .env_clear()
@@ -228,7 +243,30 @@ fn core_command(binary: &Path) -> Command {
     if let Some(abi) = std::env::var_os("OXIDEPM_TEST_LANDLOCK_ABI") {
         command.env("OXIDEPM_TEST_LANDLOCK_ABI", abi);
     }
+    if let Some(bundle) = bundle {
+        command.env("OXIDEPM_TEST_INDEX_KEYS", &bundle.public_key);
+    }
     command
+}
+
+fn core_release_tag(cli: &Path, home: &Path) -> String {
+    let output = core_command(cli, None)
+        .arg("--version")
+        .env("HOME", home)
+        .env("OXIDEPM_HOME", home)
+        .output()
+        .expect("run oxidepm --version");
+    assert!(
+        output.status.success(),
+        "reading the core version failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let banner = String::from_utf8(output.stdout).expect("the version is UTF-8");
+    let version = banner
+        .trim()
+        .strip_prefix("oxidepm ")
+        .expect("oxidepm --version prints the core version");
+    format!("v{version}")
 }
 
 impl Env {
@@ -248,7 +286,7 @@ impl Env {
     /// A daemon in a new home with a release bundle installed alongside the core binaries.
     pub fn with_bundle(adapters: &[&Adapter], daemon_env: &[(&str, &str)]) -> Env {
         let scratch = private_tempdir();
-        let dir = scratch.path().join("share/oxidepm/adapters");
+        let dir = scratch.path().join(oxidepm_core::release_bundle::DIRECTORY);
         let inputs: Vec<oxidepm_adapter_bundle::Input> = adapters
             .iter()
             .map(|a| oxidepm_adapter_bundle::Input {
@@ -256,22 +294,28 @@ impl Env {
                 exe: a.exe_path.clone(),
             })
             .collect();
-        oxidepm_adapter_bundle::build(
-            &dir,
-            &inputs,
-            &oxidepm_adapter_bundle::Options {
-                target: oxidepm_adapter_proto::host_target(),
-                url_base: "https://adapters.example.org/bundle".to_string(),
-                sequence: 1,
-                generated: chrono::Utc::now(),
-                valid_for: chrono::Duration::days(30),
-            },
+        let options = oxidepm_adapter_bundle::Options {
+            target: oxidepm_adapter_proto::host_target(),
+            url_base: "https://adapters.example.org/bundle".to_string(),
+            sequence: 1,
+            generated: chrono::Utc::now(),
+            valid_for: chrono::Duration::days(30),
+        };
+        oxidepm_adapter_bundle::build(&dir, &inputs, &options).expect("make the bundle");
+
+        let core = bundle_core_bins();
+        let tag = core_release_tag(&core.cli, scratch.path());
+        let comment = bundle_trusted_comment(&tag, &options.target);
+        let key = TestKey::generate();
+        let checksums = fs::read(dir.join("SHA256SUMS")).expect("read the bundle checksums");
+        fs::write(
+            dir.join("SHA256SUMS.minisig"),
+            key.sign(&checksums, &comment),
         )
-        .expect("make the bundle");
+        .expect("write the bundle signature");
 
         let bin = scratch.path().join("bin");
         std::fs::create_dir(&bin).unwrap();
-        let core = core_bins();
         for (source, name) in [
             (core.cli.clone(), "oxidepm"),
             (core.daemon.clone(), "oxidepmd"),
@@ -293,6 +337,7 @@ impl Env {
                     daemon: bin.join("oxidepmd"),
                     cli: bin.join("oxidepm"),
                 },
+                public_key: key.public_base64(),
                 single_adapter: match adapters {
                     [adapter] => Some(adapter.name.clone()),
                     _ => None,
@@ -310,7 +355,7 @@ impl Env {
         let dir = private_tempdir();
         let home = create_home(dir.path());
         let stderr = std::fs::File::create(home.join("daemon-test.stderr")).unwrap();
-        let mut command = core_command(&bins.daemon);
+        let mut command = core_command(&bins.daemon, bundle.as_ref());
         command
             .envs(daemon_env.iter().copied())
             .env("OXIDEPM_HOME", &home)
@@ -483,7 +528,7 @@ impl Env {
             Some(bundle) => &bundle.bins,
             None => core_bins(),
         };
-        let mut command = core_command(&bins.cli);
+        let mut command = core_command(&bins.cli, self.bundle.as_ref());
         command
             .args(args)
             .env("HOME", &self.home)
