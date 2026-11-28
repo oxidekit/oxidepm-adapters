@@ -304,7 +304,7 @@ fn a_node_app_starts_from_the_bundle_of_a_release_with_nothing_fetched() {
         serde_json::from_str(&info.stdout).unwrap_or_else(|_| panic!("{}", info.all()));
     assert_eq!(info["enabled"], true, "{info}");
     assert_eq!(info["source"], "bundled", "{info}");
-    assert_eq!(info["trust"], "bundled", "{info}");
+    assert_eq!(info["trust"], "bundled:verified", "{info}");
 
     let reply = env.start("web", "node", "server.js", &[], &dir);
     assert_eq!(reply["type"], "started", "{reply}");

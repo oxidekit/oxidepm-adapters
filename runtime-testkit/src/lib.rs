@@ -443,7 +443,7 @@ impl Env {
         );
         self.adapter_name = name.to_string();
         let info = self.adapter_info();
-        assert_eq!(info["trust"], "bundled", "{info}");
+        assert_eq!(info["trust"], "bundled:verified", "{info}");
         assert_eq!(info["enabled"], false, "{info}");
         let fingerprint = info["fingerprint"].as_str().expect("a fingerprint");
         assert!(import.stderr.contains(fingerprint), "{}", import.all());
